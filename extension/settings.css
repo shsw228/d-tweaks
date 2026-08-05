@@ -1,0 +1,230 @@
+/*
+ * d-tweaks / appearance of the settings UI
+ *
+ * Shared by the options page (options.html) and the popup (popup.html). crates/options
+ * builds the rows from the settings tables.
+ *
+ * The popup has `body.compact`: a smaller width, less space, and no descriptions
+ * (crates/options puts them into the `title` attribute).
+ */
+
+:root {
+  color-scheme: light dark;
+  --fg: #1a1a1a;
+  --muted: #6b6b6b;
+  --bg: #ffffff;
+  --line: #e2e2e2;
+  --accent: #cc0033;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #ececec;
+    --muted: #9a9a9a;
+    --bg: #1b1b1b;
+    --line: #333333;
+    --accent: #ff5c7a;
+  }
+}
+
+body {
+  margin: 0;
+  padding: 32px 24px 48px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP",
+    sans-serif;
+  line-height: 1.6;
+}
+
+main {
+  max-width: 640px;
+  margin-inline: auto;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+}
+
+.lead {
+  margin: 0 0 28px;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+#settings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Section heading */
+.group {
+  margin: 20px 0 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.group:first-child {
+  margin-top: 0;
+}
+
+.feature {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 16px 4px;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.feature:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.feature input {
+  margin: 4px 0 0;
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+}
+
+.label {
+  font-weight: 600;
+}
+
+/* A row with a list. The height is the same as a row with a switch. */
+.feature .choice {
+  flex: none;
+  margin-left: auto;
+  align-self: center;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.description {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+#status {
+  min-height: 1.6em;
+  margin-top: 20px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+/* ---------------------------------------------------------------- *
+ * The popup (body.compact)
+ * ---------------------------------------------------------------- */
+
+body.compact {
+  /* The width of a Chrome popup comes from its content. Too narrow is unreadable. */
+  width: 340px;
+  padding: 12px 14px 14px;
+  line-height: 1.5;
+}
+
+body.compact main {
+  max-width: none;
+}
+
+body.compact .head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+body.compact h1 {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+body.compact #version {
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
+
+body.compact .lead {
+  margin: 0 0 10px;
+  font-size: 0.75rem;
+}
+
+body.compact .group {
+  margin: 12px 0 0;
+  font-size: 0.6875rem;
+}
+
+body.compact .feature {
+  gap: 8px;
+  padding: 7px 2px;
+  font-size: 0.8125rem;
+}
+
+body.compact .feature input {
+  margin: 2px 0 0;
+  width: 14px;
+  height: 14px;
+}
+
+body.compact .feature .choice {
+  padding: 2px 4px;
+  font-size: 0.75rem;
+}
+
+body.compact #status {
+  min-height: 1.4em;
+  margin-top: 10px;
+  font-size: 0.6875rem;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.actions button {
+  flex: 1 1 auto;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.actions button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---------------------------------------------------------------- *
+ * While the extension is off
+ *
+ * Rows that look normal but do nothing are confusing, so they are grey. They stay
+ * clickable: the user can prepare the other settings first.
+ * ---------------------------------------------------------------- */
+
+body.dt-disabled #settings > .group:not(:first-child),
+body.dt-disabled #settings > .feature:not(:nth-of-type(1)) {
+  opacity: 0.45;
+}

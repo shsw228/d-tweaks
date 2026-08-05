@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "responseHeaders": [
+        {
+          "header": "content-security-policy",
+          "operation": "set",
+          "value": "frame-src 'self' https://platform.twitter.com https://syndication.twitter.com https://www.facebook.com https://asia.creativecdn.com/ https://8731124.fls.doubleclick.net/ https://bid.g.doubleclick.net/ https://spdmg-backend.i-mobile.co.jp/ https://gum.criteo.com/ https://static.criteo.net/ https://www.youtube.com/ https://*.dmarket.docomo.ne.jp https://optimize.google.com; frame-ancestors https://animestore.docomo.ne.jp"
+        }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||animestore.docomo.ne.jp/animestore/",
+      "resourceTypes": ["main_frame"]
+    }
+  }
+]

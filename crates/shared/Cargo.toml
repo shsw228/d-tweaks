@@ -1,0 +1,15 @@
+[package]
+name = "d-tweaks-shared"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "content script / service worker / options page で共有する設定モデルと chrome API バインディング"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+js-sys.workspace = true

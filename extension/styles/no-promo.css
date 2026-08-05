@@ -1,0 +1,19 @@
+/*
+ * d-tweaks / no-promo
+ *
+ * Hides the promotion dialog (`<dialog class="popup-wrapper">`).
+ *
+ * This does not make the page clickable: while a `<dialog>` is open as a modal, the rest
+ * of the page is inert, so `display: none` hides it but nothing below can be clicked
+ * (measured). The close is the work of crates/core/src/features/promo.rs; this file only
+ * hides the dialog for the time until the WASM runs.
+ *
+ * The selector is `popup-wrapper` and not `dialog`, so a `<dialog>` that the site uses for
+ * something else (a confirmation) is not hidden.
+ *
+ * html.dt-off turns this off (the kill switch).
+ */
+
+html:not(.dt-off) dialog.popup-wrapper {
+  display: none !important;
+}

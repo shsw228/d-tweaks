@@ -1,0 +1,618 @@
+/*
+ * d-tweaks / top-page
+ *
+ * The own top page (tp_pc). crates/core/src/features/top_page.rs builds the DOM.
+ *
+ * The order of the site is not kept. It has 15 horizontal sliders of the same shape (6432px
+ * in total, 4360 to 10410px inside each), and nothing shows what is important. The own order
+ * is by role: the showcase (one work, large), then today, then the ranking with numbers, then
+ * "find", which is the other 10 sliders as one grid with chips.
+ *
+ * The original DOM is hidden and not removed: only `.l-section.dt-top-rendered` is hidden, so
+ * without the WASM the top page of the site stays. A slider that is not 16:9 (the covers of
+ * the books, the four-image tiles of a my-list) is not used, so it also stays.
+ *
+ * The inside of a card comes from list-grid.css: a card is the same `.dt-card`
+ * (`card_view::render`), so this file has only the frame and the hover. The rules need the
+ * `html:not(.dt-off)` prefix, against `.dt-card { position: absolute }` of list-grid.css.
+ */
+
+:root {
+  /* This page must show many works at once, so the cards are smaller than in a list */
+  --dt-top-card-min: clamp(140px, 12vw, 200px);
+  --dt-top-gap: clamp(6px, 0.7vw, 12px);
+  /* Width of one thumbnail of the rail at the bottom of the showcase */
+  --dt-rail-item: clamp(96px, 9vw, 150px);
+}
+
+/* ---------------------------------------------------------------- *
+ * 1. Hide the sections that were used
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off) .l-section.dt-top-rendered {
+  display: none !important;
+}
+
+/*
+ * Hide the sliders of the site until the own page is built.
+ *
+ * The items of a slider are not in the HTML from the server (measured: that HTML has zero
+ * `data-workid` and only 13 `p-slider__item`, and the real DOM has 262). The JS of the site
+ * asks a REST interface, so this extension must wait, and during that wait the sliders of the
+ * site were visible.
+ *
+ * `.pageWrapper:not(:has(.dt-top))` hides them only before the own page exists. The moment
+ * `.dt-top` is inserted, this rule stops, and then:
+ *
+ *   - a slider that was used stays hidden through the `display: none` of `.dt-top-rendered`,
+ *   - a slider that was not used (the books, the my-lists) appears.
+ *
+ * So everything appears at the same moment.
+ *
+ * If the WASM does not run, or the feature is off, the site must not stay invisible for ever,
+ * so an animation makes it visible after 2.5 seconds (`visibility` is not continuous, so a
+ * keyframe changes it).
+ */
+@keyframes dt-top-hold {
+  0%,
+  99% {
+    visibility: hidden;
+  }
+  100% {
+    visibility: visible;
+  }
+}
+
+html:not(.dt-off) .pageWrapper:not(:has(.dt-top)) .l-section {
+  /* Time until the site returns. A long time keeps the page invisible. */
+  animation: dt-top-hold 2.5s steps(1) forwards;
+}
+
+/*
+ * Hides the "continue watching" banner at the top of the site.
+ *
+ * Hide the container. Inside it there are two parts:
+ *
+ *   .pageHeader.top > .pageHeaderIn > .information (the text and the play button)
+ *                                   > .thumbnailContainer (a 196x110 thumbnail)
+ *
+ * so a rule on `.information` alone leaves the thumbnail (which happened). The only content
+ * of `.pageHeader.top` is this banner, so that is the correct element.
+ *
+ * It is hidden only with `.dt-top`, so without the WASM the banner stays.
+ */
+html:not(.dt-off) .pageWrapper:has(.dt-top) .pageHeader.top {
+  display: none !important;
+}
+
+/* ---------------------------------------------------------------- *
+ * 2. 全体
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off) .dt-top {
+  color: #fff;
+}
+
+html:not(.dt-off) .dt-top,
+html:not(.dt-off) .dt-top * {
+  box-sizing: border-box;
+}
+
+html:not(.dt-off) .dt-top__section,
+html:not(.dt-off) .dt-top__browse {
+  margin: 0 var(--dt-page-pad, clamp(16px, 2.5vw, 64px))
+    clamp(20px, 2.5vw, 40px);
+}
+
+html:not(.dt-off) .dt-top__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+html:not(.dt-off) .dt-top__title {
+  margin: 0;
+  font-size: clamp(15px, 1.3vw, 20px);
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+}
+
+html:not(.dt-off) .dt-top__note {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+html:not(.dt-off) .dt-top__all {
+  margin-left: auto;
+  flex: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+html:not(.dt-off) .dt-top__all::after {
+  content: " ›";
+}
+
+html:not(.dt-off) .dt-top__all:hover {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- *
+ * 3. The showcase
+ *
+ * The text is at the bottom left, over a black gradient that makes it readable.
+ * ---------------------------------------------------------------- */
+
+/*
+ * The showcase is a column from the bottom: the text, then the rail.
+ *
+ * The height of the rail is not added to the `bottom` of the text
+ * (`calc(var(--dt-rail-height) + …)`): the height of the rail comes from a `clamp`, so two
+ * places with the same number always disagree. With a column, the text can never go under
+ * the rail.
+ */
+html:not(.dt-off) .dt-top__hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  margin: 0 0 clamp(20px, 2.5vw, 40px);
+  /* Full width. The width decides the height, with a maximum, so it is not too tall. */
+  height: min(52vw, 520px);
+  min-height: 340px;
+  overflow: hidden;
+  background: #0d0d0d;
+}
+
+/*
+ * One `<img>` per item, and every `<img>` stays (top_page.rs). Only the item on screen has
+ * `is-on`. No `src` changes, so no image is loaded twice, and the change of the opacity has
+ * no black moment.
+ */
+html:not(.dt-off) .dt-top__heroImgs {
+  position: absolute;
+  inset: 0;
+}
+
+html:not(.dt-off) .dt-top__heroImg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Darker at the bottom left, where the text is */
+  object-position: center 30%;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+html:not(.dt-off) .dt-top__heroImg.is-on {
+  opacity: 1;
+}
+
+/*
+ * The left side, under the text, is nearly black.
+ *
+ * A key visual often has the work title in the image, and with a light gradient that title
+ * and the own title are both visible, which is hard to read. The subject of the image is
+ * usually on the right, so a dark left side does not hide it.
+ */
+html:not(.dt-off) .dt-top__hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      to right,
+      rgba(0, 0, 0, 0.94) 0%,
+      rgba(0, 0, 0, 0.88) 26%,
+      rgba(0, 0, 0, 0.5) 48%,
+      transparent 70%
+    ),
+    linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.9) 0%,
+      rgba(0, 0, 0, 0.35) 45%,
+      transparent 80%
+    );
+  pointer-events: none;
+}
+
+/*
+ * Everything over the rail goes to the work page.
+ *
+ * The text cannot be inside an `<a>`: it has the link to the ranking in it, and a link inside
+ * a link is not valid. So an anchor lies under the text and the text passes its clicks. Only
+ * the elements that are clickable (the tag, the button) have `pointer-events: auto`.
+ */
+html:not(.dt-off) .dt-top__heroHit {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  /* Not over the rail: its thumbnails must stay clickable */
+  bottom: 0;
+  z-index: 0;
+  /* No image and no decoration; only a click area */
+  text-decoration: none;
+}
+
+html:not(.dt-off) .dt-top__heroBody {
+  position: relative;
+  z-index: 1;
+  /* Outside of the text, a click goes to the anchor below */
+  pointer-events: none;
+  padding: 0 var(--dt-page-pad, clamp(16px, 2.5vw, 64px))
+    clamp(12px, 1.5vw, 20px);
+  /* A long line is hard to read, so the text is narrower than the rail */
+  max-width: min(100%, calc(720px + var(--dt-page-pad, 32px)));
+}
+
+/* ---------------------------------------------------------------- *
+ * 3-2. The rail of thumbnails (the ranking)
+ *
+ * The banner and the ranking list were two blocks; this is one. The rail is at the bottom, a
+ * frame marks the item on screen, and a click changes the item. top_page.rs
+ * (`render_showcase`) builds it.
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off) .dt-top__rail {
+  position: relative;
+  flex: none;
+  /* Over the anchor (z-index: 0), so the rail itself is clickable */
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+  padding: 10px var(--dt-page-pad, clamp(16px, 2.5vw, 64px));
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  /* No scroll bar (the same as the comment list) */
+  scrollbar-width: none;
+  /* Darker under the rail, so the thumbnails have an edge */
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.72), transparent);
+}
+
+html:not(.dt-off) .dt-top__rail::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+html:not(.dt-off) .dt-top__railItem {
+  position: relative;
+  flex: none;
+  width: var(--dt-rail-item);
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: #0d0d0d;
+  overflow: hidden;
+  cursor: pointer;
+  opacity: 0.55;
+  transition:
+    opacity 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+html:not(.dt-off) .dt-top__railItem:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+/* The item on screen: a frame and more opacity */
+html:not(.dt-off) .dt-top__railItem.is-on {
+  opacity: 1;
+  border-color: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+html:not(.dt-off) .dt-top__railImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+html:not(.dt-off) .dt-top__railRank {
+  position: absolute;
+  left: 3px;
+  top: -3px;
+  font-size: 20px;
+  font-weight: 800;
+  font-style: italic;
+  line-height: 1;
+  color: #fff;
+  text-shadow:
+    0 0 6px rgba(0, 0, 0, 0.95),
+    0 1px 3px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+}
+
+html:not(.dt-off) .dt-top__heroLink[hidden] {
+  display: none;
+}
+
+/*
+ * The source of the item (a rank), as the entry to that list.
+ *
+ * A large red block would be more visible than the title, so this is a small chip like the
+ * meta of the head bar.
+ *
+ * The selector needs the `a.` prefix: `a:link, a:active, a:visited { color: #333 }` of the
+ * site has a specificity of (0,1,1), and dark grey on black is not readable.
+ */
+html:not(.dt-off) .dt-top__heroTag,
+html:not(.dt-off) a.dt-top__heroTag {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 10px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  backdrop-filter: blur(2px);
+  transition: background 0.15s ease;
+}
+
+html:not(.dt-off) a.dt-top__heroTag::after {
+  content: " ›";
+  margin-left: 3px;
+  opacity: 0.7;
+}
+
+html:not(.dt-off) a.dt-top__heroTag:hover {
+  background: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
+html:not(.dt-off) .dt-top__heroTitle {
+  margin: 0 0 8px;
+  font-size: clamp(19px, 2.2vw, 34px);
+  font-weight: 700;
+  line-height: 1.2;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+  overflow-wrap: anywhere;
+  /* At most two lines: more would push the rail down */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+html:not(.dt-off) .dt-top__heroExp {
+  margin: 0 0 12px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  line-height: 1.7;
+  /* A summary is long (measured: 485 characters), so two lines. The work page has all. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+}
+
+html:not(.dt-off) .dt-top__heroLink {
+  pointer-events: auto;
+  display: inline-block;
+  padding: 0 20px;
+  height: 38px;
+  line-height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 19px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #111;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+html:not(.dt-off) .dt-top__heroLink:hover {
+  background: #fff;
+  transform: translateY(-1px);
+}
+
+/* On a narrow screen, the summary only takes height */
+@media (max-width: 640px) {
+  html:not(.dt-off) .dt-top__hero {
+    height: min(88vw, 400px);
+    min-height: 280px;
+  }
+
+  html:not(.dt-off) .dt-top__heroExp {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- *
+ * 4. The grid (today, ranking and find)
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off) .dt-top__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--dt-top-card-min), 1fr));
+  gap: var(--dt-top-gap);
+  align-items: start;
+}
+
+html:not(.dt-off) .dt-top__grid > .dt-card {
+  position: relative;
+  inset: auto;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #0d0d0d;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+html:not(.dt-off) .dt-top__grid > .dt-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+
+html:not(.dt-off) .dt-top__grid > .dt-card:hover .dt-card__img {
+  transform: scale(1.04);
+}
+
+html:not(.dt-off) .dt-top__grid > .dt-card:hover .dt-card__play {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* The cards are small, so the text has less space */
+html:not(.dt-off) .dt-top__grid > .dt-card .dt-card__body {
+  padding: 22px 8px 7px;
+}
+
+/*
+ * On this page the work title is the main text.
+ *
+ * `top_page.rs` puts it into `work` and not into `title`, because the data attributes of the
+ * comment search and the link to the work page come from `work`. In a list, `work` is the
+ * second text (11px, quiet), so these rules make it the main one again.
+ */
+html:not(.dt-off) .dt-top__grid > .dt-card .dt-card__work {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  -webkit-line-clamp: 2;
+}
+
+html:not(.dt-off) .dt-top__grid > .dt-card .dt-card__number {
+  margin-top: 0;
+  font-size: 10px;
+}
+
+html:not(.dt-off) .dt-top__grid > .dt-card .dt-card__title {
+  font-size: 12px;
+  -webkit-line-clamp: 2;
+}
+
+html:not(.dt-off) .dt-top__grid > .dt-card .dt-card__play {
+  width: 34px;
+  height: 34px;
+}
+
+html:not(.dt-off) .dt-top__grid > .dt-card .dt-card__play::after {
+  border-width: 6px 0 6px 10px;
+}
+
+/*
+ * The rank. The DOM of the site has no rank, only the order, so top_page.rs adds it. The
+ * number is large, at the top left.
+ */
+html:not(.dt-off) .dt-top__rank {
+  position: absolute;
+  left: 4px;
+  top: -2px;
+  z-index: 3;
+  font-size: 30px;
+  font-weight: 800;
+  font-style: italic;
+  line-height: 1;
+  color: #fff;
+  text-shadow:
+    0 0 8px rgba(0, 0, 0, 0.9),
+    0 2px 4px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
+html:not(.dt-off) .dt-top__more {
+  display: block;
+  margin: 12px auto 0;
+  padding: 0 16px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+html:not(.dt-off) .dt-top__more:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ---------------------------------------------------------------- *
+ * 5. Find (the chips)
+ *
+ * The site has 10 sliders of the same shape. This is one grid, and the titles are chips. Only
+ * the selected chip is drawn, so only its images are loaded.
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off) .dt-top__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+html:not(.dt-off) .dt-top__chip {
+  flex: none;
+  padding: 0 12px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.75);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+html:not(.dt-off) .dt-top__chip:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+html:not(.dt-off) .dt-top__chip.is-on {
+  background: #fff;
+  border-color: #fff;
+  color: #111;
+  font-weight: 700;
+}
+
+html:not(.dt-off) .dt-top__browseBody > .dt-top__all {
+  display: block;
+  margin: 10px 0 0;
+  text-align: right;
+}
+
+/* ---------------------------------------------------------------- *
+ * Kill switch (html.dt-off)
+ *
+ * With the extension off, the own elements also go. Only removing their appearance would
+ * leave an unstyled page, which looks worse. Every rule that hides the original DOM has the
+ * `html:not(.dt-off)` prefix, so the site returns.
+ * ---------------------------------------------------------------- */
+
+html.dt-off .dt-top {
+  display: none !important;
+}

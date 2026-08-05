@@ -1,0 +1,66 @@
+name: build
+
+# Builds the extension from a clean checkout and keeps the archive.
+#
+# The WASM in the archive is not readable, so the reviewer of the store needs the
+# source and a build that anyone can repeat. This workflow is that proof.
+
+on:
+  push:
+    branches: [main]
+    tags: ["*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup target add wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install just and wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just,wasm-pack
+
+      # wasm-pack takes the wasm-opt of the PATH. Its own copy can be older than the
+      # flags in the Cargo.toml of the crates (`--enable-bulk-memory-opt`), so pin the
+      # version that the local build uses.
+      - name: Install binaryen (wasm-opt)
+        run: |
+          version=version_131
+          curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/${version}/binaryen-${version}-x86_64-linux.tar.gz" | tar -xz
+          echo "${PWD}/binaryen-${version}/bin" >> "${GITHUB_PATH}"
+
+      - name: Show the versions
+        run: |
+          rustc --version
+          wasm-pack --version
+          wasm-opt --version
+          just --version
+
+      - name: Lint and format
+        run: just check
+
+      - name: Test
+        run: just test
+
+      # Also asserts that the archive has nothing that the store rejects.
+      - name: Package
+        run: just package
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: extension-zip
+          path: dist/*.zip
+          if-no-files-found: error

@@ -1,0 +1,761 @@
+/*
+ * d-tweaks / player-modal
+ *
+ * The float window that plays an episode on the list page.
+ * crates/core/src/features/player_modal.rs builds the DOM.
+ *
+ * This file alone does nothing: the modal exists only while the WASM makes it. Without the
+ * WASM, a click goes to the player page of the site.
+ *
+ * If the video is black, test if a screen capture runs. With a capture, Chrome blanks
+ * protected video (DRM), so the sound plays and the picture is black. This happens in an
+ * iframe, in picture-in-picture and in the player of the site. A screenshot still shows the
+ * picture, so a screenshot is not evidence.
+ *
+ * If it is still black, remove these one by one. Protected video is drawn in an overlay, and
+ * a clip or a filter of an ancestor can stop that:
+ *
+ *   1. the backdrop-filter of .dt-modal__backdrop
+ *   2. the overflow: hidden and the border-radius of .dt-modal__panel
+ *   3. the background of .dt-modal__backdrop
+ *
+ * Layout: the panel is the head, the stage (the video, 16:9) and the bar, from the top. The
+ * stage holds the 16:9, and the width of the panel comes from "the head, the height of the
+ * stage and the height of the bar fit on the screen". A width that does not count the two
+ * bars is too large.
+ *
+ * The comment list and the debug view lie over the video inside the stage; side by side they
+ * would make the video smaller. Their width is --dt-side-width, and a drag on the left edge
+ * changes it (player_modal.rs). At 0 they are not visible.
+ *
+ * The handle (.dt-modal__resizer) must not be a child of the side column: that has
+ * overflow: hidden, so at width 0 the handle is also cut and nobody can take it again. It is
+ * a child of the stage, over the left edge of the side column.
+ *
+ * There is no close button. Esc and a click on the background close the modal.
+ */
+
+html.dt-modal-open {
+  overflow: hidden !important;
+}
+
+.dt-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dt-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(3px);
+}
+
+.dt-modal__panel {
+  /* Width of the side column. A drag writes this. */
+  --dt-side-width: 340px;
+  /* Height of the control bar, with the space above it. The width of the panel uses it. */
+  --dt-bar-height: 52px;
+  /* Height of the head bar, with the space below it. The width also needs this. */
+  --dt-head-height: 60px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* The head, the 16:9 of the video and the bar together fit on the screen */
+  width: min(
+    92vw,
+    calc((100vh - 96px - var(--dt-head-height) - var(--dt-bar-height)) * 16 / 9)
+  );
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7);
+}
+
+/*
+ * The head bar, over the video and not on it.
+ *
+ * The player of the site draws the title on the video and removes it after a few seconds, so
+ * it hides the picture and cannot be read later. Like the control bar below, this keeps the
+ * information in one place. crates/core/src/features/player_meta.rs fills it.
+ */
+.dt-modal__head {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  height: 52px;
+  margin-bottom: 8px;
+  padding: 0 12px;
+  background: #171717;
+  color: #fff;
+  overflow: hidden;
+}
+
+.dt-head__main {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* More space between the work title and the episode */
+.dt-head__number,
+.dt-head__title:first-of-type {
+  margin-left: 6px;
+}
+
+.dt-head__number + .dt-head__title {
+  margin-left: 0;
+}
+
+/*
+ * The work title, as a link back to the work page.
+ *
+ * The selector needs the `a.` prefix. The site has
+ * `a:link, a:active, a:visited { color: #333 }` with a specificity of (0,1,1), so
+ * `.dt-head__work` alone (0,1,0) loses and the text is dark grey on black (measured).
+ */
+.dt-modal__head a.dt-head__work {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dt-modal__head a.dt-head__work:hover {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/*
+ * The episode number and the episode title are the same kind of information, so they look
+ * the same. A colour and a frame on the number alone make them look different.
+ */
+.dt-head__number,
+.dt-head__title {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dt-head__number {
+  flex: none;
+}
+
+/* The episode title is the long one, so it gives the space */
+.dt-head__title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* No empty box without content */
+.dt-head__number:empty,
+.dt-head__title:empty {
+  display: none;
+}
+
+/*
+ * The meta line. One long line of grey text on black is not readable, so every item is a
+ * chip and the label is darker than the value. player_meta.rs builds the DOM.
+ */
+.dt-head__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dt-head__chip {
+  flex: none;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.11);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+/* The label is quiet; the value must be readable */
+.dt-head__chipLabel {
+  color: rgba(255, 255, 255, 0.55);
+  font-style: normal;
+  font-size: 10px;
+}
+
+.dt-head__chipValue {
+  color: rgba(255, 255, 255, 0.92);
+  font-variant-numeric: tabular-nums;
+}
+
+/* "continue at" must be visible */
+.dt-head__chip.is-resume {
+  background: rgba(235, 85, 40, 0.22);
+}
+
+.dt-head__chip.is-resume .dt-head__chipValue {
+  color: #ffb59e;
+}
+
+.dt-head__chip.is-latest {
+  background: rgba(31, 156, 86, 0.28);
+}
+
+.dt-head__chip.is-latest .dt-head__chipValue {
+  color: #7ee2a8;
+}
+
+/*
+ * The skip button, at the bottom right of the video.
+ *
+ * crates/core/src/features/player_meta.rs decides when it appears, from the chapters of the
+ * episode. It never skips an avant.
+ *
+ * It lies over the comment list (z-index: 3) and under the handle (4), and it moves left by
+ * the width of the side column.
+ */
+.dt-skip {
+  position: absolute;
+  right: calc(var(--dt-side-width, 0px) + 16px);
+  bottom: 16px;
+  z-index: 3;
+  padding: 0 16px;
+  height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(2px);
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.dt-skip:hover {
+  background: rgba(0, 0, 0, 0.85);
+  border-color: #fff;
+  transform: translateY(-1px);
+}
+
+.dt-skip[hidden] {
+  display: none;
+}
+
+/* On a low screen, the meta line only takes height */
+@media (max-height: 620px) {
+  .dt-modal__panel {
+    --dt-head-height: 38px;
+  }
+
+  .dt-modal__head {
+    height: 30px;
+    justify-content: center;
+  }
+
+  .dt-head__meta {
+    display: none;
+  }
+}
+
+/* The video, with the danmaku and the comment list over it */
+.dt-modal__stage {
+  position: relative;
+  flex: none;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+}
+
+/*
+ * The control bar. It is outside of the video, so it hides nothing and is always in the
+ * same place. A small space separates it from the video.
+ */
+.dt-modal__bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  margin-top: 8px;
+  padding: 0 10px;
+  background: #121212;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+}
+
+.dt-bar__button {
+  flex: none;
+  min-width: 30px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.dt-bar__button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* A control that is off: a line through it and less contrast, with no icon */
+.dt-bar__button--off {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.dt-bar__time {
+  flex: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.dt-bar__seek {
+  flex: 1 1 auto;
+  min-width: 80px;
+}
+
+.dt-bar__volume {
+  flex: none;
+  width: 72px;
+}
+
+.dt-modal__bar input[type="range"] {
+  height: 4px;
+  margin: 0;
+  appearance: none;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.22);
+  cursor: pointer;
+}
+
+.dt-modal__bar input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+/* Hide the danmaku. The drawing continues, so it is correct when it returns. */
+.dt-modal__panel.dt-hide-danmaku .dt-danmaku {
+  display: none;
+}
+
+/*
+ * The large size is the area of the browser and not the fullscreen of the operating system:
+ * without the tabs and the address bar, the way back to the list is not visible. The 16:9
+ * stays, the video is centred, and the control bar stays below it.
+ */
+.dt-modal__panel.dt-maximized {
+  width: 100vw;
+  height: 100vh;
+  max-height: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+}
+
+.dt-modal__panel.dt-maximized .dt-modal__stage {
+  width: min(
+    100vw,
+    calc((100vh - var(--dt-head-height) - var(--dt-bar-height)) * 16 / 9)
+  );
+}
+
+.dt-modal__panel.dt-maximized .dt-modal__bar,
+.dt-modal__panel.dt-maximized .dt-modal__head {
+  width: 100%;
+}
+
+/*
+ * The comment list and the debug view, over the right side of the video. They lie over the
+ * danmaku (z-index: 1) and under the handle (z-index: 4).
+ */
+.dt-modal__side {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  width: var(--dt-side-width);
+  display: flex;
+  flex-direction: column;
+  /* The list inside can only scroll if this element may become smaller */
+  min-height: 0;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+}
+
+/* The handle for the width, over the left edge of the side column */
+.dt-modal__resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* Over the left edge of the side column. At width 0 it stays at the right edge of the
+     stage, so it can still be taken. */
+  right: var(--dt-side-width);
+  z-index: 4;
+  width: 12px;
+  margin-right: -6px;
+  cursor: col-resize;
+}
+
+.dt-modal__resizer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.14);
+  transition: background 0.15s ease;
+}
+
+.dt-modal__resizer:hover::before,
+.dt-modal__panel.dt-resizing .dt-modal__resizer::before {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* During a drag, the iframe must not take the pointer */
+.dt-modal__panel.dt-resizing .dt-modal__stage {
+  pointer-events: none;
+}
+
+.dt-modal__frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.dt-modal__frame[hidden] {
+  display: none;
+}
+
+/* The UI for a CSP block */
+.dt-modal__fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px;
+  text-align: center;
+  color: #fff;
+}
+
+.dt-modal__fallback[hidden] {
+  display: none;
+}
+
+.dt-modal__message {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dt-modal__hint {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* A higher specificity than `a:link`, for the same reason as the work title above */
+.dt-modal__fallback a.dt-modal__openTab {
+  margin-top: 6px;
+  padding: 8px 18px;
+  border-radius: 4px;
+  background: #cc0033;
+  color: #fff;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.dt-modal__fallback a.dt-modal__openTab:hover {
+  background: #e0335c;
+  color: #fff;
+}
+
+/*
+ * The canvas of the danmaku (features/danmaku.rs of core builds it). It lies over the video
+ * and passes every click to the player.
+ */
+.dt-danmaku {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* --- The side column --- */
+
+/* The state of the request. This is the heading of the side column. */
+.dt-comments {
+  flex: none;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/*
+ * The comment list. It scrolls with the play position, and only it grows to fill the
+ * height of the side column.
+ */
+.dt-commentList {
+  /* Makes the offsetTop of a row relative to this box, which the auto-scroll needs */
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 0;
+  /* No scroll bar: the auto-scroll is the normal way to move */
+  scrollbar-width: none;
+}
+
+.dt-commentList::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.dt-commentList__row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 8px;
+  padding: 2px 12px;
+  /*
+   * There are thousands of rows, so the rows off screen skip their layout and their
+   * drawing. Without contain-intrinsic-size, the scroll length is unstable.
+   */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 26px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* The comment at the play position */
+.dt-commentList__row--current {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.dt-commentList__time {
+  color: rgba(255, 255, 255, 0.38);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dt-commentList__row--current .dt-commentList__time {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* A long comment wraps */
+.dt-commentList__body {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/*
+ * The debug view of the video (features/danmaku.rs of core builds it).
+ *
+ * The label and the value are two columns of a grid and not one string with spaces: the
+ * glyph widths of Japanese differ, so spaces do not align.
+ */
+.dt-debug {
+  flex: none;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 1px;
+  margin: 0;
+  padding: 8px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.86);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 10px;
+  line-height: 1.65;
+  text-align: left;
+}
+
+.dt-debug__key {
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+
+/* The same digit width, so the column does not move */
+.dt-debug__value {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * A video title rarely fits on one line, so it wraps. More than two lines would make the
+ * view too tall, so it stops at two.
+ */
+.dt-debug__value--wrap {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The controls for the comment offset (features/danmaku.rs of core builds them).
+ *
+ * The official video and the dAnime video do not always start at the same point, so the
+ * offset is manual. It is kept per videoId.
+ */
+.dt-offset {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+}
+
+.dt-offset__label {
+  flex: none;
+  margin-right: auto;
+}
+
+.dt-offset__value {
+  flex: none;
+  min-width: 4.2em;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  cursor: pointer;
+}
+
+/* The same look as a button of the control bar */
+.dt-bar__button,
+.dt-offset__button {
+  flex: none;
+  min-width: 30px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.dt-bar__button:hover,
+.dt-offset__button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.dt-offset__button {
+  min-width: 26px;
+  height: 22px;
+  font-size: 11px;
+}
+
+/* ---------------------------------------------------------------- *
+ * A narrow screen
+ * ---------------------------------------------------------------- */
+
+/*
+ * The side column has a maximum width. The width of a drag is an inline value, so this is
+ * only a maximum and does not fight that variable.
+ */
+html:not(.dt-off) .dt-modal__side {
+  width: min(var(--dt-side-width), 60vw);
+}
+
+@media (max-width: 900px) {
+  /* The buttons do not fit, so the rarely used ones go */
+  .dt-bar__button--secondary {
+    display: none;
+  }
+
+  .dt-modal__panel {
+    --dt-side-width: 0px;
+  }
+
+  .dt-modal__bar {
+    gap: 4px;
+    padding: 0 6px;
+  }
+
+  .dt-bar__volume {
+    display: none;
+  }
+}
+
+/* Without the time, the position is unknown, so the time always stays */
+@media (max-width: 560px) {
+  .dt-bar__time {
+    font-size: 10px;
+  }
+}
+
+/* ---------------------------------------------------------------- *
+ * Kill switch (html.dt-off)
+ *
+ * With the extension off, the own elements also go. Only removing their appearance would
+ * leave an unstyled float window, which looks worse. Every rule that hides the original DOM
+ * has the `html:not(.dt-off)` prefix, so the site returns.
+ * ---------------------------------------------------------------- */
+
+html.dt-off .dt-modal {
+  display: none !important;
+}

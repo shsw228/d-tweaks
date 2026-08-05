@@ -1,0 +1,81 @@
+[package]
+name = "d-tweaks-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "dアニメストア表示改善拡張の DOM 操作ロジック"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# rustc は wasm32-unknown-unknown に対して既定で bulk-memory 等を出力するが、
+# wasm-pack は wasm-opt にその許可フラグを渡さないため検証エラーになる。明示する。
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = [
+  "-Oz",
+  "--enable-bulk-memory",
+  "--enable-bulk-memory-opt",
+  "--enable-nontrapping-float-to-int",
+  "--enable-reference-types",
+  "--enable-sign-ext",
+  "--enable-mutable-globals",
+  "--enable-multivalue",
+]
+
+[package.metadata.wasm-pack.profile.dev]
+wasm-opt = false
+
+[dependencies]
+d-tweaks-shared = { path = "../shared" }
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+js-sys.workspace = true
+
+[dependencies.web-sys]
+workspace = true
+features = [
+  "console",
+  "Window",
+  "Document",
+  "Element",
+  "HtmlElement",
+  "HtmlInputElement",
+  "HtmlSelectElement",
+  "HtmlAnchorElement",
+  "Event",
+  "EventTarget",
+  "MouseEvent",
+  "KeyboardEvent",
+  "InputEvent",
+  "HtmlIFrameElement",
+  "HtmlDialogElement",
+  "Node",
+  "NodeList",
+  "DomTokenList",
+  "Location",
+  "CssStyleDeclaration",
+  "DomRect",
+  # 無限スクロール用
+  "IntersectionObserver",
+  "IntersectionObserverInit",
+  "IntersectionObserverEntry",
+  # 後から差し込まれるカードを拾う
+  "MutationObserver",
+  "MutationObserverInit",
+  "Response",
+  "RequestInit",
+  "AbortController",
+  "AbortSignal",
+  "DomParser",
+  "SupportedType",
+  "Url",
+  "UrlSearchParams",
+  # 弾幕描画用
+  "HtmlCanvasElement",
+  "CanvasRenderingContext2d",
+  "TextMetrics",
+  "HtmlMediaElement",
+  "TimeRanges",
+  "DocumentFragment",
+]

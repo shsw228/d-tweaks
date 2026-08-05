@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>d-tweaks</title>
+    <!-- The look is shared with the options page. `compact` makes it smaller. -->
+    <link rel="stylesheet" href="./settings.css" />
+  </head>
+  <body class="compact">
+    <main>
+      <div class="head">
+        <h1>d-tweaks</h1>
+        <span id="version"></span>
+      </div>
+      <p class="lead">切り替えは即座に保存されます。</p>
+      <!--
+        crates/options builds the rows from the settings tables. The rows and their order
+        are the same as on the options page, and the id is also #settings.
+      -->
+      <div id="settings"></div>
+      <p id="status"></p>
+      <div class="actions">
+        <!-- A write is immediate, but an open page needs a reload -->
+        <button type="button" id="reload">ページを再読み込み</button>
+        <button type="button" id="openOptions">説明つきで開く</button>
+      </div>
+      <div class="actions">
+        <!-- A wrong result in the cache makes a correction look like a failure -->
+        <button type="button" id="clearCache">コメントの控えを消す</button>
+      </div>
+    </main>
+    <!-- The CSP (script-src 'self') has no inline script, so this is a real file -->
+    <script type="module" src="./popup-loader.js"></script>
+  </body>
+</html>

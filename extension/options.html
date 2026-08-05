@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>d-tweaks の設定</title>
+    <!-- The look is shared with the popup (popup.html) -->
+    <link rel="stylesheet" href="./settings.css" />
+  </head>
+  <body>
+    <main>
+      <h1>d-tweaks</h1>
+      <p class="lead">
+        切り替えると即座に保存されます。すでに開いているタブには再読み込み後に反映されます。
+      </p>
+      <!-- crates/options builds the rows from the settings tables -->
+      <div id="settings"></div>
+      <p id="status"></p>
+    </main>
+    <!-- The CSP (script-src 'self') has no inline script, so this is a real file -->
+    <script type="module" src="./options-loader.js"></script>
+  </body>
+</html>

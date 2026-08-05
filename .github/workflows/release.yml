@@ -1,0 +1,61 @@
+name: release
+
+# A tag starts a release. `just release <version>` writes the version into
+# `extension/manifest.json`, commits, and makes the tag, so the tag is only a mark on a
+# commit that already has the correct version. The first step here proves that.
+
+on:
+  push:
+    tags: ["*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: The tag and the manifest must agree
+        run: |
+          version=$(python3 -c 'import json;print(json.load(open("extension/manifest.json"))["version"])')
+          echo "tag=${GITHUB_REF_NAME} manifest=${version}"
+          if [ "${GITHUB_REF_NAME}" != "${version}" ]; then
+            echo "タグ名と manifest.json の version が違います" >&2
+            exit 1
+          fi
+
+      - name: Install the Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup target add wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install just and wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just,wasm-pack
+
+      - name: Install binaryen (wasm-opt)
+        run: |
+          version=version_131
+          curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/${version}/binaryen-${version}-x86_64-linux.tar.gz" | tar -xz
+          echo "${PWD}/binaryen-${version}/bin" >> "${GITHUB_PATH}"
+
+      - name: Lint and format
+        run: just check
+
+      - name: Test
+        run: just test
+
+      - name: Package
+        run: just package
+
+      # The archive of a release must be the one that the store receives, so it comes
+      # from this build and not from a machine.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" dist/*.zip --title "${GITHUB_REF_NAME}" --generate-notes

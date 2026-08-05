@@ -1,0 +1,284 @@
+/*
+ * d-tweaks / work-hero
+ *
+ * The head of a work page (ci_pc) as a full-width hero.
+ * crates/core/src/features/work_hero.rs builds the DOM.
+ *
+ * The original head is 563px:
+ *
+ *     key visuals (one 629x354 and two 305x172)   354px
+ *     title, my-list and favorite                  65px
+ *     1080p, free episodes, related books          19px
+ *
+ * It is 944px wide and centred, so over the full-width grid of the episodes it looks like an
+ * island in the middle.
+ *
+ * CSS does not correct it: removing the fixed width, the white background and the
+ * display:table one by one gives lost specificity battles and exceptions (one attempt left the
+ * image small and the white band visible). Like the cards of a list, the WASM draws own
+ * elements and this file hides the original DOM.
+ *
+ * The original DOM is hidden only with `.dt-hero-rendered`, so without the WASM nothing is
+ * hidden and the site stays. The my-list and the favorite belong to the JS of the site, so
+ * they are not hidden; only their position changes.
+ *
+ * html.dt-off turns everything off (the kill switch).
+ */
+
+:root {
+  /* Height of the hero. It is low, so the episodes are visible early. */
+  --dt-hero-height: clamp(190px, 24vw, 320px);
+  /* Space at the edges. The same as the grid of the episodes. */
+  --dt-hero-pad: clamp(16px, 2.5vw, 64px);
+}
+
+/* ---------------------------------------------------------------- *
+ * 1. 枠
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off) .productWrapperIn.dt-hero-rendered {
+  position: relative !important;
+  height: var(--dt-hero-height) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background: #0b0b0b !important;
+}
+
+/* ---------------------------------------------------------------- *
+ * 2. Hide the original DOM
+ *
+ * The my-list and the favorite are also own buttons now, so everything here can be hidden. A
+ * click goes to the button of the site through `click()` (work_hero.rs).
+ *
+ * An earlier version kept the buttons of the site and only changed their position, but then
+ * every change of the width made a label wrap or a size disagree.
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off) .productWrapperIn.dt-hero-rendered > .keyVisual,
+html:not(.dt-off) .productWrapperIn.dt-hero-rendered > .information,
+html:not(.dt-off) .productWrapperIn.dt-hero-rendered > .itemRelatedContainer {
+  display: none !important;
+}
+
+/* ---------------------------------------------------------------- *
+ * 3. The own hero
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off) .dt-hero {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/*
+ * A work page can have more than one key visual (one large image and images of episodes).
+ * They lie on each other and appear one after the other, with a change of the opacity.
+ */
+html:not(.dt-off) .dt-hero__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* The visible part is a little over the middle, where a face usually is */
+  object-fit: cover;
+  object-position: center 35%;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+
+html:not(.dt-off) .dt-hero__image.is-current {
+  opacity: 1;
+}
+
+/* No change for a viewer who asked for less motion */
+@media (prefers-reduced-motion: reduce) {
+  html:not(.dt-off) .dt-hero__image {
+    transition: none;
+  }
+}
+
+/*
+ * A gradient from the bottom makes the text readable on every image, so the lower half is
+ * dark. The top edge is also darker, which separates the hero from the breadcrumbs.
+ */
+html:not(.dt-off) .dt-hero__shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.95) 0%,
+    rgba(0, 0, 0, 0.85) 24%,
+    rgba(0, 0, 0, 0.45) 56%,
+    rgba(0, 0, 0, 0.1) 82%,
+    rgba(0, 0, 0, 0.3) 100%
+  );
+}
+
+html:not(.dt-off) .dt-hero__body {
+  position: absolute;
+  left: var(--dt-hero-pad, clamp(16px, 2.5vw, 64px));
+  right: var(--dt-hero-pad, clamp(16px, 2.5vw, 64px));
+  bottom: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: #fff;
+}
+
+html:not(.dt-off) .dt-hero__title {
+  margin: 0;
+  font-size: clamp(18px, 2.3vw, 30px);
+  font-weight: 700;
+  line-height: 1.25;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
+  /* At most two lines, also for a long title */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+html:not(.dt-off) .dt-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+html:not(.dt-off) .dt-hero__chip {
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 3px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+html:not(.dt-off) .dt-hero__chip--free {
+  border-color: #ff5c7a;
+  color: #ff8fa3;
+}
+
+html:not(.dt-off) .dt-hero__note {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+html:not(.dt-off) .dt-hero__link {
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+html:not(.dt-off) .dt-hero__link:hover {
+  color: #fff;
+  border-bottom-color: rgba(255, 255, 255, 0.7);
+}
+
+/* The controls: my-list, favorite, number of favorites */
+html:not(.dt-off) .dt-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+html:not(.dt-off) .dt-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+html:not(.dt-off) .dt-action:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.8);
+}
+
+/* The icons are glyphs and not images */
+html:not(.dt-off) .dt-action::before {
+  font-size: 13px;
+  line-height: 1;
+}
+
+html:not(.dt-off) .dt-action--mylist::before {
+  content: "＋";
+}
+
+html:not(.dt-off) .dt-action--favo::before {
+  content: "♡";
+}
+
+/* The favorite is on. This follows the classes of the site (checked, on). */
+html:not(.dt-off) .dt-action--favo.is-on {
+  border-color: #ff5c7a;
+  background: rgba(255, 92, 122, 0.22);
+}
+
+html:not(.dt-off) .dt-action--favo.is-on::before {
+  content: "♥";
+  color: #ff8fa3;
+}
+
+/* ---------------------------------------------------------------- *
+ * 4. The notes after the hero (the update time) get the same width
+ * ---------------------------------------------------------------- */
+
+/*
+ * The notes are outside of `.productWrapper` (they are under `.accordionWrapper`), so the
+ * test for the hero is on the html element: there is no near common ancestor.
+ */
+html:not(.dt-off):has(.dt-hero) .accordionWrapper > header.attention {
+  width: auto !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 12px var(--dt-hero-pad, clamp(16px, 2.5vw, 64px)) 0 !important;
+}
+
+/* ---------------------------------------------------------------- *
+ * 5. A narrow screen
+ * ---------------------------------------------------------------- */
+
+/*
+ * The controls are inside the text of the hero, so nothing moves. Only the space at the
+ * bottom is smaller, so the text is not too close to it.
+ */
+@media (max-width: 900px) {
+  html:not(.dt-off) .dt-hero__body {
+    bottom: 14px;
+    gap: 8px;
+  }
+
+  html:not(.dt-off) .dt-action {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+}
+
+/* ---------------------------------------------------------------- *
+ * Kill switch (html.dt-off)
+ *
+ * With the extension off, the own elements also go. Only removing their appearance would
+ * leave an unstyled hero, which looks worse. Every rule that hides the original DOM has the
+ * `html:not(.dt-off)` prefix, so the site returns.
+ * ---------------------------------------------------------------- */
+
+html.dt-off .dt-hero {
+  display: none !important;
+}

@@ -1,0 +1,333 @@
+/*
+ * d-tweaks / search-overlay
+ *
+ * The float search of the header link "さがす".
+ * crates/core/src/features/search_overlay.rs builds the DOM and gets the results.
+ *
+ * This file alone does nothing: the float exists only while the WASM makes it. Without the
+ * WASM, a click goes to the search page of the site.
+ *
+ * The inside of a card comes from list-grid.css: the results are the same `.dt-card`
+ * (`card_view::render`), and the thumbnail, the title and the badges are styled there. This
+ * file has only the frame (position, ratio, corners) and the hover. The episode list
+ * (episode-grid.css) has the same relation.
+ *
+ * The rules of the frame need the `html:not(.dt-off)` prefix. `html:not(.dt-off) .dt-card`
+ * of list-grid.css has `position: absolute; inset: 0` for a list. Without the prefix, that
+ * rule wins, the cards stay absolute, and the grid has a height of 0 (measured: with two
+ * results, the body was 32px, which is only its padding, and the cards were on each other,
+ * so the float looked like a search bar alone).
+ *
+ * A closed float is removed with an explicit rule: `.dt-search` is display: flex, so
+ * `[hidden]` does nothing (an author style wins over the default display: none of the
+ * attribute).
+ *
+ * The kill switch (html.dt-off) gives the page of the site back, and this float is not part
+ * of that page, so it has no such rule (the same as player-modal.css).
+ */
+
+html.dt-search-open {
+  overflow: hidden !important;
+}
+
+.dt-search {
+  position: fixed;
+  inset: 0;
+  /* Under the float player (2147483000): it never needs to be over a video */
+  z-index: 2147482900;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(12px, 6vh, 72px) clamp(8px, 3vw, 32px) clamp(12px, 4vh, 48px);
+}
+
+.dt-search[hidden] {
+  display: none;
+}
+
+.dt-search *,
+.dt-search *::before,
+.dt-search *::after {
+  box-sizing: border-box;
+}
+
+.dt-search__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+/*
+ * The height of the panel does not depend on the number of results.
+ *
+ * With the height of its content, the panel is a thin band with only the input before the
+ * first key (measured: 101px), which does not look like a search. The height is fixed and
+ * the results scroll inside it.
+ */
+.dt-search__panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(1240px, 100%);
+  height: min(760px, 100%);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: #131313;
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-family: inherit;
+}
+
+/* ---------------------------------------------------------------- *
+ * 入力
+ * ---------------------------------------------------------------- */
+
+.dt-search__bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dt-search__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 42px;
+  /* The input of the site has no corners and a light colour, so this is explicit */
+  appearance: none;
+}
+
+.dt-search__input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.dt-search__input:focus {
+  outline: none;
+  border-color: rgba(235, 85, 40, 0.8);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+/* The sort. The same options and values as #listsort of the site. */
+.dt-search__sort {
+  flex: none;
+  height: 42px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* An open list is drawn by the browser, so the dark background is explicit */
+.dt-search__sort option {
+  background: #1b1b1b;
+  color: #fff;
+}
+
+/* The toggle that removes the rentals. On by default. */
+.dt-search__filter {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 42px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.dt-search__filter:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.dt-search__rental {
+  /* Back to a normal checkbox: the reset of the site also matches this input */
+  appearance: auto;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #eb5528;
+  cursor: pointer;
+}
+
+/* The count and the state, right of the input, and below it on a narrow screen */
+.dt-search__status {
+  flex: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* Less contrast while a request runs. There is no spinner. */
+.dt-search--loading .dt-search__status {
+  opacity: 0.5;
+}
+
+/* ---------------------------------------------------------------- *
+ * 結果
+ * ---------------------------------------------------------------- */
+
+.dt-search__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 16px 18px;
+  /* No scroll bar: the next page arrives before the bottom edge */
+  scrollbar-width: none;
+}
+
+.dt-search__body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.dt-search__grid {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(170px, 16vw, 250px), 1fr));
+  gap: clamp(8px, 1vw, 14px);
+  align-items: start;
+}
+
+/*
+ * The frame of a card. In a list it lies over the original element (.itemModule), so it is
+ * absolute; here there is no such element, so the card is its own 16:9 box (the same as
+ * episode-grid.css).
+ *
+ * `html:not(.dt-off)` is necessary against `.dt-card { position: absolute }` of
+ * list-grid.css (see the head of this file).
+ */
+html:not(.dt-off) .dt-search__grid > .dt-card {
+  position: relative;
+  inset: auto;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #0d0d0d;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+html:not(.dt-off) .dt-search__grid > .dt-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+
+/*
+ * list-grid.css has the hover on `.itemModule:hover`. There is no .itemModule here, so the
+ * same rules use the own card.
+ */
+html:not(.dt-off) .dt-search__grid > .dt-card:hover .dt-card__img {
+  transform: scale(1.04);
+}
+
+html:not(.dt-off) .dt-search__grid > .dt-card:hover .dt-card__play {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* The message while there are no results. The panel keeps its height, so it is centred. */
+.dt-search__empty {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 24px 12px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 13px;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.dt-search__empty[hidden] {
+  display: none;
+}
+
+/*
+ * Below the grid: the sentinel of the prefetch, and also the state.
+ *
+ * `search_overlay.rs` watches it with an IntersectionObserver and starts the next page
+ * before it becomes visible. There is no button. It keeps a height when it is empty, so the
+ * observer can see it.
+ */
+.dt-search__footer {
+  flex: none;
+  min-height: 28px;
+  margin: 14px 0 0;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------- *
+ * On a narrow screen, the float uses the whole screen
+ * ---------------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  .dt-search {
+    padding: 0;
+  }
+
+  .dt-search__panel {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border: none;
+    border-radius: 0;
+  }
+
+  /* The input, the sort and the count do not fit on one line */
+  .dt-search__bar {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+
+  .dt-search__input {
+    flex-basis: 100%;
+  }
+
+  .dt-search__sort,
+  .dt-search__filter {
+    height: 34px;
+  }
+}
+
+/* ---------------------------------------------------------------- *
+ * Kill switch (html.dt-off)
+ *
+ * With the extension off, the own elements also go. Only removing their appearance would
+ * leave an unstyled float, which looks worse. Every rule that hides the original DOM has the
+ * `html:not(.dt-off)` prefix, so the site returns.
+ * ---------------------------------------------------------------- */
+
+html.dt-off .dt-search {
+  display: none !important;
+}

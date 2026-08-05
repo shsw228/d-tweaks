@@ -1,0 +1,479 @@
+/*
+ * d-tweaks / list-grid
+ *
+ * Makes a list page a full-width grid, in place of two fixed columns in 860px, and shows
+ * the own cards of crates/core/src/features/card_view.rs.
+ *
+ * CSS does not correct the original DOM. The site puts the work title in a different place
+ * on every page (inside the lower text on "continue", in a header before the thumbnail on
+ * the history and the favorites, in h3.line2 on the complete list), and `h3.line2` is the
+ * work title on some pages and the subtitle on others. CSS on that gives one exception per
+ * page and the pages still look different. So the WASM parses the DOM and builds own
+ * cards, and this file styles only those.
+ *
+ * The original DOM is hidden and not removed: the JS of the site uses it (the edit mode,
+ * the favorite control). Only a card with `.itemModule.dt-rendered` is hidden, so without
+ * the WASM nothing is hidden and the site stays. The interactive `.check` (favorite, edit
+ * mode) is not hidden; only its position changes.
+ *
+ * Scope: `.itemWrapper.clearfix` is also on a feature page (/animestore/CF/summer), but
+ * there it is under `.weekWrapper` and has another structure. On a list page it is a direct
+ * child of `.contentsWrapper` or `.pageWrapper`, which is the test here.
+ *
+ * html.dt-off turns everything off (the kill switch).
+ */
+
+/*
+ * The sizes use `clamp`.
+ *
+ * The breakpoints of the site are 840px and 960px (measured), where it changes between the
+ * PC and the SP layout. A fixed px width here always breaks before one of them, so
+ * everything scales without a step.
+ */
+:root {
+  /* Minimum width of a column; the number of columns follows from it. On a narrow screen
+     the minimum is also smaller, so one column does not become too wide. */
+  --dt-card-min: clamp(220px, 20vw, 300px);
+  --dt-gap: clamp(8px, 1vw, 16px);
+/*
+   * Space at the edge of the page. Four CSS files use the same value (list, episode, hero,
+   * detail): a different left edge puts the title of the hero out of line with the cards.
+   *
+   * The maximum of 64px is for a very wide screen. With 32px, a 2560px screen looks like
+   * the content touches the edge.
+   */
+  --dt-page-pad: clamp(16px, 2.5vw, 64px);
+  --dt-radius: 10px;
+  /* The paging keeps its width and stays centred */
+  --dt-paging-max: 860px;
+  /* The text wraps earlier, by the width of the favorite control (.check) */
+  --dt-check-space: 78px;
+}
+
+/* ---------------------------------------------------------------- *
+ * 1. Remove the fixed width of 860px
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off)
+  .contentsWrapper:has(> .itemWrapper.clearfix:not(.onlySpLayout)) {
+  width: auto !important;
+  max-width: none !important;
+  margin-inline: 0 !important;
+  padding-inline: 0 !important;
+}
+
+html:not(.dt-off)
+  .contentsWrapper:has(> .itemWrapper.clearfix:not(.onlySpLayout))
+  > .paging {
+  width: auto !important;
+  max-width: var(--dt-paging-max) !important;
+  margin-inline: auto !important;
+}
+
+/* ---------------------------------------------------------------- *
+ * 2. A grid in place of the float layout
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off)
+  :is(.contentsWrapper, .pageWrapper)
+  > .itemWrapper.clearfix:not(.onlySpLayout) {
+  width: auto !important;
+  max-width: none !important;
+  margin-inline: var(--dt-page-pad, clamp(16px, 2.5vw, 64px)) !important;
+  display: grid !important;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(var(--dt-card-min), 1fr)
+  ) !important;
+  gap: var(--dt-gap) !important;
+  align-items: start !important;
+}
+
+html:not(.dt-off)
+  :is(.contentsWrapper, .pageWrapper)
+  > .itemWrapper.clearfix:not(.onlySpLayout)::before,
+html:not(.dt-off)
+  :is(.contentsWrapper, .pageWrapper)
+  > .itemWrapper.clearfix:not(.onlySpLayout)::after {
+  display: none !important;
+}
+
+/* ---------------------------------------------------------------- *
+ * 3. The frame of a card. The own UI goes inside it.
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off)
+  :is(.contentsWrapper, .pageWrapper)
+  > .itemWrapper.clearfix:not(.onlySpLayout)
+  > .itemModule {
+  position: relative !important;
+  width: auto !important;
+  height: auto !important;
+  float: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  aspect-ratio: 16 / 9 !important;
+  overflow: hidden !important;
+  border-radius: var(--dt-radius) !important;
+  background: #0d0d0d !important;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease !important;
+}
+
+html:not(.dt-off)
+  :is(.contentsWrapper, .pageWrapper)
+  > .itemWrapper.clearfix:not(.onlySpLayout)
+  > .itemModule:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55) !important;
+}
+
+/* ---------------------------------------------------------------- *
+ * 4. Hide the original DOM, only on a card that has an own UI
+ *
+ * `.check` (the favorite control, the checkbox of the edit mode) is interactive and stays.
+ * The `section` also stays, as the reference for the position of `.check`.
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off)
+  :is(.contentsWrapper, .pageWrapper)
+  > .itemWrapper.clearfix:not(.onlySpLayout)
+  > .itemModule.dt-rendered
+  > section {
+  position: absolute !important;
+  inset: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  /* The content is hidden, so it must not block the link of the thumbnail */
+  pointer-events: none !important;
+}
+
+html:not(.dt-off)
+  :is(.contentsWrapper, .pageWrapper)
+  > .itemWrapper.clearfix:not(.onlySpLayout)
+  > .itemModule.dt-rendered
+  > section
+  > .itemModuleIn,
+html:not(.dt-off)
+  :is(.contentsWrapper, .pageWrapper)
+  > .itemWrapper.clearfix:not(.onlySpLayout)
+  > .itemModule.dt-rendered
+  > section
+  > header,
+html:not(.dt-off)
+  :is(.contentsWrapper, .pageWrapper)
+  > .itemWrapper.clearfix:not(.onlySpLayout)
+  > .itemModule.dt-rendered
+  > section
+  > .detail,
+html:not(.dt-off)
+  :is(.contentsWrapper, .pageWrapper)
+  > .itemWrapper.clearfix:not(.onlySpLayout)
+  > .itemModule.dt-rendered
+  > section
+  > ul.option,
+html:not(.dt-off)
+  :is(.contentsWrapper, .pageWrapper)
+  > .itemWrapper.clearfix:not(.onlySpLayout)
+  > .itemModule.dt-rendered
+  > .selectedImg {
+  display: none !important;
+}
+
+/*
+ * `.check` holds a transparent input (the click area) and a label (text and a heart icon in
+ * `::after`). Its padding is for the original layout, so that goes first, and then it sits
+ * on the last line of the text of the own card.
+ *
+ * Without that, it is about 4px too high and the lines do not agree (measured). The space
+ * uses the same values as the padding of the text (30px 11px 9px).
+ */
+html:not(.dt-off)
+  :is(.contentsWrapper, .pageWrapper)
+  > .itemWrapper.clearfix:not(.onlySpLayout)
+  > .itemModule.dt-rendered
+  > section
+  > .check {
+  position: absolute !important;
+  inset: auto 11px 9px auto !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 0 !important;
+  z-index: 5 !important;
+  pointer-events: auto !important;
+}
+
+html:not(.dt-off)
+  :is(.contentsWrapper, .pageWrapper)
+  > .itemWrapper.clearfix:not(.onlySpLayout)
+  > .itemModule.dt-rendered
+  > section
+  > .check
+  label {
+  /*
+   * The cause is the `height: 18px` that the site puts on the label. The line
+   * (line-height 15.4px) sits at the top of that box and leaves 2.6px below, so even with
+   * the boxes aligned the text is 2.6px too high (measured with a Range). Without the
+   * height, the box is the line and the text agrees.
+   *
+   * The vertical padding also goes. The padding on the right stays: it is the place of the
+   * heart icon (label::after).
+   */
+  height: auto !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7) !important;
+}
+
+/*
+ * `.check` lies over the bottom right of the card, so the text wraps earlier by its width
+ * and does not go under it.
+ *
+ * With one line and an ellipsis, this space made more text disappear. Now the text can
+ * wrap, so it only adds a line and loses nothing.
+ *
+ * A page without `.check` has no such space.
+ */
+html:not(.dt-off)
+  :is(.contentsWrapper, .pageWrapper)
+  > .itemWrapper.clearfix:not(.onlySpLayout)
+  > .itemModule.dt-rendered:has(> section > .check)
+  .dt-card__body
+  > * {
+  padding-right: var(--dt-check-space);
+}
+
+/* ---------------------------------------------------------------- *
+ * 5. The own card
+ * ---------------------------------------------------------------- */
+
+/*
+ * The own card uses border-box.
+ *
+ * The site uses content-box everywhere, so a padding is added to the width, and horizontal
+ * padding inside a card would put it outside of the card (measured: 67px too wide).
+ */
+html:not(.dt-off) .dt-card,
+html:not(.dt-off) .dt-card * {
+  box-sizing: border-box;
+}
+
+html:not(.dt-off) .dt-card {
+  position: absolute;
+  inset: 0;
+  color: #fff;
+  font-family: inherit;
+}
+
+/* The thumbnail and the main click area (play, or the work page) */
+html:not(.dt-off) .dt-card__main {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  background: #0d0d0d;
+}
+
+html:not(.dt-off) .dt-card__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.3s ease;
+}
+
+html:not(.dt-off) .itemModule:hover .dt-card__img {
+  transform: scale(1.04);
+}
+
+/* The play icon. It appears in the middle on hover. */
+html:not(.dt-off) .dt-card__play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 46px;
+  transform: translate(-50%, -50%) scale(0.9);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  opacity: 0;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+html:not(.dt-off) .dt-card__play::after {
+  content: "";
+  position: absolute;
+  left: 52%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-style: solid;
+  border-width: 8px 0 8px 13px;
+  border-color: transparent transparent transparent #fff;
+}
+
+html:not(.dt-off) .itemModule:hover .dt-card__play {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* Progress bar */
+html:not(.dt-off) .dt-card__progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.18);
+  z-index: 4;
+  pointer-events: none;
+}
+
+html:not(.dt-off) .dt-card__progress > span {
+  display: block;
+  height: 100%;
+  background: #eb5528;
+}
+
+/* The "seen" mark */
+html:not(.dt-off) .dt-card__watched {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.62);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* The text under the thumbnail */
+html:not(.dt-off) .dt-card__body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 30px 11px 9px;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.92) 0%,
+    rgba(0, 0, 0, 0.72) 46%,
+    rgba(0, 0, 0, 0.2) 78%,
+    transparent 100%
+  );
+  z-index: 2;
+  /* Outside of the text, a click goes to the link of the thumbnail */
+  pointer-events: none;
+}
+
+html:not(.dt-off) .dt-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 5px;
+}
+
+html:not(.dt-off) .dt-badge {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+html:not(.dt-off) .dt-badge--new {
+  background: #1f9c56;
+}
+
+html:not(.dt-off) .dt-badge--complete {
+  background: #cc0033;
+}
+
+/*
+ * The work title. A click goes to the work page, without a partId.
+ *
+ * The title wraps: with one line and an ellipsis, a long title is not readable. The limit
+ * is three lines. The longest title in the real data (44 characters) needs two lines, so
+ * three lines show every title. Without a limit, the text would fill the card.
+ */
+html:not(.dt-off) .dt-card__work {
+  max-width: 100%;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 11px;
+  line-height: 1.4;
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+  pointer-events: auto;
+}
+
+html:not(.dt-off) a.dt-card__work:hover {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Episode number */
+html:not(.dt-off) .dt-card__number {
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 11px;
+  line-height: 1.4;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+}
+
+/* The subtitle, also up to three lines: the favorite control makes the width smaller */
+html:not(.dt-off) .dt-card__title {
+  margin-top: 1px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-decoration: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  pointer-events: auto;
+}
+
+html:not(.dt-off) a.dt-card__title:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- *
+ * Kill switch (html.dt-off)
+ *
+ * With the extension off, the own elements also go. Only removing their appearance would
+ * leave unstyled cards, which looks worse. Every rule that hides the original DOM has the
+ * `html:not(.dt-off)` prefix, so the site returns.
+ * ---------------------------------------------------------------- */
+
+html.dt-off .dt-card {
+  display: none !important;
+}

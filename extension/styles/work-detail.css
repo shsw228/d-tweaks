@@ -1,0 +1,188 @@
+/*
+ * d-tweaks / work-detail
+ *
+ * The summary, the genres, the cast and the staff of a work page, as own tables.
+ * crates/core/src/features/work_detail.rs builds the DOM.
+ *
+ * The original page has two folds, and the same data is in two places. The cast of
+ * `.tagArea` is only the names, but `[キャスト]` of `.castContainer` has pairs of a role and
+ * a name, which is more readable, so the pairs are used.
+ *
+ * The original DOM is hidden and not removed: only with `.dt-detail-rendered`, so without the
+ * WASM the folds of the site stay.
+ *
+ * html.dt-off turns everything off (the kill switch).
+ */
+
+:root {
+  --dt-detail-pad: var(--dt-page-pad, clamp(16px, 2.5vw, 64px));
+  /* Minimum width of a block; the number of columns follows from it.
+     狭すぎると役名と名前が折り返すので 360px 取る */
+  --dt-detail-min: 360px;
+  /* Width of the detail column when the page has two columns */
+  --dt-detail-side: 420px;
+  /* Width at which the page has two columns. Below it, they are in one column. */
+  --dt-work-split: 1600px;
+}
+
+/* ---------------------------------------------------------------- *
+ * 1. Hide the original folds
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off) .accordionWrapper.dt-detail-rendered > .outlineWrapper,
+html:not(.dt-off) .accordionWrapper.dt-detail-rendered > .castWrapper,
+html:not(.dt-off) .accordionWrapper.dt-detail-rendered > .tagArea {
+  display: none !important;
+}
+
+/* ---------------------------------------------------------------- *
+ * 2. The own tables
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off) .dt-detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--dt-detail-min), 1fr));
+  gap: 20px clamp(20px, 3vw, 48px);
+  align-items: start;
+  margin: 8px var(--dt-detail-pad) 32px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+html:not(.dt-off) .dt-detail__block {
+  min-width: 0;
+}
+
+html:not(.dt-off) .dt-detail__heading {
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* A long line of the summary is hard to read, so its width is smaller */
+html:not(.dt-off) .dt-detail__prose {
+  margin: 0;
+  max-width: 46em;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+/*
+ * The role and the name, in two columns, like the debug view. An item without a role has an
+ * empty first column.
+ */
+html:not(.dt-off) .dt-detail__pairs {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 2px;
+}
+
+html:not(.dt-off) .dt-detail__key {
+  color: rgba(255, 255, 255, 0.5);
+  /* A maximum, so a long role does not move the column */
+  max-width: 14em;
+  overflow-wrap: anywhere;
+}
+
+html:not(.dt-off) .dt-detail__value {
+  color: rgba(255, 255, 255, 0.9);
+  overflow-wrap: anywhere;
+}
+
+/* The genres and the other tags */
+html:not(.dt-off) .dt-detail__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+html:not(.dt-off) .dt-detail__chip {
+  padding: 3px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+html:not(.dt-off) a.dt-detail__chip:hover {
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+/* The copyright is last and uses every column */
+html:not(.dt-off) .dt-detail__copyright {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- *
+ * 3. On a wide screen: the episodes on the left, the details on the right
+ *
+ * On a very wide screen, the episodes over the full width give eight columns or more, and the
+ * details are only visible after a scroll. Side by side, both are visible. The details keep
+ * one column: with auto-fit they would become five columns and the roles would wrap.
+ *
+ * The two sides have different heights (19 rows of staff against 5 to 124 episodes), so the
+ * details are sticky and follow the scroll, which hides the empty space of the shorter side.
+ * ---------------------------------------------------------------- */
+
+@media (min-width: 1600px) {
+  html:not(.dt-off) .dt-work {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--dt-detail-side);
+    gap: 0 clamp(24px, 2vw, 48px);
+    align-items: start;
+  }
+
+  html:not(.dt-off) .dt-work > .dt-episodes {
+    /*
+     * The left space is the space of the text; the right space is the gap.
+     *
+     * The default value is here because episode-grid.css defines `--dt-ep-page-pad`, and that
+     * file is absent while its feature is off. Without the variable, the whole declaration is
+     * invalid and the space would be 0.
+     */
+    margin-inline: var(--dt-ep-page-pad, clamp(16px, 2.5vw, 64px)) 0;
+  }
+
+  html:not(.dt-off) .dt-work > .dt-detail {
+    /* One column: the width is small, so auto-fit breaks the layout */
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+    margin: 0 var(--dt-detail-pad) 32px 0;
+    /* The header of the site stays at the top, so this follows below it */
+    position: sticky;
+    top: 88px;
+    max-height: calc(100vh - 104px);
+    overflow-y: auto;
+    /* A scroll bar during the follow must not be visible */
+    scrollbar-width: none;
+  }
+
+  html:not(.dt-off) .dt-work > .dt-detail::-webkit-scrollbar {
+    width: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- *
+ * Kill switch (html.dt-off)
+ *
+ * With the extension off, the own elements also go. Only removing their appearance would
+ * leave unstyled tables, which looks worse. Every rule that hides the original DOM has the
+ * `html:not(.dt-off)` prefix, so the site returns.
+ * ---------------------------------------------------------------- */
+
+html.dt-off .dt-detail {
+  display: none !important;
+}

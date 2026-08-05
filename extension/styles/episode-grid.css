@@ -1,0 +1,111 @@
+/*
+ * d-tweaks / episode-grid
+ *
+ * The episodes of a work page as an own section. crates/core (work_hero.rs,
+ * render_episodes) builds the DOM.
+ *
+ * CSS does not reorder the original DOM. The episode list of the site is a Swiper
+ * (horizontal, 12 episodes per page) and it also has:
+ *
+ *   - a fold on a narrow screen (inline display:none on `.episodeSwiper`),
+ *   - a section heading that is the control of that fold,
+ *   - an SP close button inside the container of the list,
+ *   - an inline width (measured: 10494px) and a transform of the Swiper.
+ *
+ * CSS on that gives exceptions: a fixed `display` stops the fold, and the close button
+ * takes one cell of the grid. The thumbnails are enough, so the WASM parses them into an
+ * own container and this file hides the original list.
+ *
+ * An episode has no interactive control, so the original DOM is not necessary. (A card of
+ * a list has one, and the JS of the site uses it, so those stay.)
+ *
+ * The original list is hidden only with `.dt-episodes-rendered`, so without the WASM the
+ * Swiper of the site stays.
+ *
+ * The breakpoints of the site are 840px and 960px (measured). A fixed px width always
+ * breaks before one of them, so the sizes use `clamp`.
+ *
+ * html.dt-off turns everything off (the kill switch).
+ */
+
+:root {
+  --dt-ep-card-min: clamp(180px, 17vw, 260px);
+  --dt-ep-gap: clamp(8px, 1vw, 14px);
+  --dt-ep-page-pad: clamp(16px, 2.5vw, 64px);
+  --dt-ep-radius: 10px;
+  /* Long lines of the summary and the cast are hard to read, so they keep their width */
+  --dt-ep-text-max: 1024px;
+}
+
+/* ---------------------------------------------------------------- *
+ * 1. Remove the max-width of 1024px of the page, but not from the text blocks
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off) .contentsWrapper.itemIndex {
+  max-width: none !important;
+  margin-inline: 0 !important;
+}
+
+html:not(.dt-off) .accordionWrapper > p.copy,
+html:not(.dt-off) .accordionWrapper > header.attention,
+html:not(.dt-off) .accordionWrapper > .outlineWrapper,
+html:not(.dt-off) .accordionWrapper > .castWrapper,
+html:not(.dt-off) .accordionWrapper > .tagArea {
+  max-width: var(--dt-ep-text-max) !important;
+  margin-inline: auto !important;
+}
+
+/* ---------------------------------------------------------------- *
+ * 2. Hide the original list: the heading, the Swiper and the SP close button
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off) .episodeWrapper.dt-episodes-rendered {
+  display: none !important;
+}
+
+/* ---------------------------------------------------------------- *
+ * 3. The own episode list
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off) .dt-episodes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--dt-ep-card-min), 1fr));
+  gap: var(--dt-ep-gap);
+  margin: 16px var(--dt-ep-page-pad, clamp(16px, 2.5vw, 64px));
+  /* The 16:9 of a card decides the height */
+  align-items: start;
+}
+
+/*
+ * A card is the same `.dt-card` as in a list (thumbnail, number, progress). In a list it
+ * lies over the original element, so it is absolute; here there is no such element, so the
+ * card is its own 16:9 box.
+ */
+html:not(.dt-off) .dt-episodes > .dt-card {
+  position: relative;
+  inset: auto;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--dt-ep-radius);
+  background: #0d0d0d;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+html:not(.dt-off) .dt-episodes > .dt-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+
+/* ---------------------------------------------------------------- *
+ * Kill switch (html.dt-off)
+ *
+ * With the extension off, the own elements also go. Only removing their appearance would
+ * leave an unstyled list, which looks worse. Every rule that hides the original DOM has
+ * the `html:not(.dt-off)` prefix, so the site returns.
+ * ---------------------------------------------------------------- */
+
+html.dt-off .dt-episodes {
+  display: none !important;
+}

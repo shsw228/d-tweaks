@@ -1,0 +1,28 @@
+/*
+ * d-tweaks / infinite-scroll
+ *
+ * Only the appearance of the infinite scroll
+ * (crates/core/src/features/infinite_scroll.rs).
+ *
+ * The WASM adds html.dt-infinite only after it started the infinite scroll. Without the
+ * WASM, or on a page that is out of scope, nothing changes and the paging of the site
+ * stays. After a failed request, the WASM also removes dt-infinite and the paging returns.
+ */
+
+/* The pages arrive without the paging, so hide it */
+html.dt-infinite .paging {
+  display: none !important;
+}
+
+html.dt-infinite .dt-infinite-status {
+  padding: 24px 0 32px;
+  color: #999;
+  font-size: 1.2rem;
+  text-align: center;
+}
+
+/* Target of the IntersectionObserver. A height of 0 does not always intersect. */
+html.dt-infinite .dt-infinite-sentinel {
+  width: 100%;
+  height: 1px;
+}

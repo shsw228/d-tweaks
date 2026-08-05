@@ -1,0 +1,20 @@
+[
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {
+          "header": "user-agent",
+          "operation": "set",
+          "value": "d-tweaks (+https://github.com/shsw228/d-tweaks)"
+        }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search",
+      "resourceTypes": ["xmlhttprequest"]
+    }
+  }
+]

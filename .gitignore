@@ -1,0 +1,15 @@
+/target
+# Chrome が unpacked 読み込み時に作る DNR の索引。
+# `_` 始まりは予約名なので、リポジトリにも配布 zip にも入れてはいけない。
+/extension/_metadata
+# just package の出力
+/dist
+# wasm-pack の生成物（just build で再生成する）
+/extension/pkg
+/extension/pkg-background
+/extension/pkg-options
+# ビルド中の一時置き場と入れ替え前の退避（_swap が使う）
+/extension/.stage-pkg*
+/extension/pkg.old
+/extension/pkg-background.old
+/extension/pkg-options.old

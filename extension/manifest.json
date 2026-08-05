@@ -1,0 +1,66 @@
+{
+  "manifest_version": 3,
+  "name": "d-tweaks",
+  "version": "1.0.0",
+  "description": "【非公式】dアニメストアの表示を作り変えます。一覧の全幅グリッド化、エピソード全話表示、無限スクロール、同じ画面での再生。",
+  "permissions": [
+    "scripting",
+    "storage",
+    "declarativeNetRequestWithHostAccess"
+  ],
+  "host_permissions": [
+    "https://animestore.docomo.ne.jp/*",
+    "https://*.nicovideo.jp/*"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      { "id": "csp", "enabled": false, "path": "rules.json" },
+      { "id": "nico-ua", "enabled": false, "path": "rules-nico.json" }
+    ]
+  },
+  "background": {
+    "service_worker": "sw.js",
+    "type": "module"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "d-tweaks の設定",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://animestore.docomo.ne.jp/animestore/*"],
+      "exclude_matches": [
+        "https://animestore.docomo.ne.jp/animestore/book/*",
+        "https://animestore.docomo.ne.jp/animestore/ec/*"
+      ],
+      "js": ["pkg/core.js", "wasm-loader.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["pkg/core_bg.wasm"],
+      "matches": ["https://animestore.docomo.ne.jp/*"]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+}
