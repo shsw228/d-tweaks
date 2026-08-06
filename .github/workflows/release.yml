@@ -39,7 +39,16 @@ jobs:
 
       # The archive of a release must be the one that the store receives, so it comes
       # from this build and not from a machine.
+      # A tag can arrive a second time, for example after a correction of the history, and
+      # then the release exists already. `gh release create` fails on that, so the step
+      # replaces the archive instead.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" dist/*.zip --title "${GITHUB_REF_NAME}" --generate-notes
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" dist/*.zip --clobber
+          else
+            gh release create "${tag}" dist/*.zip --title "${tag}" --generate-notes
+          fi
