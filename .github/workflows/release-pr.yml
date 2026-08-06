@@ -85,7 +85,17 @@ jobs:
           git commit -m "[chore] バージョンを ${VERSION} に上げる"
           git push --force origin "${branch}"
 
-          body=$(git cliff --tag "${VERSION}" --unreleased --strip all)
+          # printf and not a multi-line string: a line of `---` at column 0 would end the
+          # YAML document.
+          notes=$(git cliff --tag "${VERSION}" --unreleased --strip all)
+          note=$(printf '%s\n' \
+            "" \
+            "差分は manifest・Cargo・CHANGELOG の 4 ファイルだけです。" \
+            "この PR の build が \"awaiting approval\" のままでも問題ありません" \
+            "（ボットが作った PR のワークフローは承認が要る仕様です）。" \
+            "マージ後に release が同じ検証を通してから公開します。")
+          body="${notes}${note}"
+
           if gh pr view "${branch}" >/dev/null 2>&1; then
             gh pr edit "${branch}" --title "[chore] Release ${VERSION}" --body "${body}"
           else
