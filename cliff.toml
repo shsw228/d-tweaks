@@ -1,13 +1,25 @@
 # git-cliff: makes the changelog and decides the next version.
 #
-# One line of the changelog is one commit. The subjects are `[kind] text` in Japanese and
-# not conventional commits, so the parsers below read that form. Keep a subject on one
-# line and put the detail in the pull request: the subject is what a reader of the
-# changelog gets.
+# One line of the changelog is one commit. Keep a subject on one line and put the detail
+# in the pull request: the subject is what a reader of the changelog gets.
 #
 # The repository merges a pull request with a merge commit, so the commits of the branch
 # stay in the history. That keeps the version bump exact: it comes from the kinds of the
 # real commits and not from the title of the pull request.
+#
+# # The subjects become conventional commits before anything reads them
+#
+# The subjects are `[kind] text` in Japanese. `commit_preprocessors` turns `[feat]` into
+# `feat:` and so on, and `conventional_commits = true` reads that form.
+#
+# The first version of this file did the opposite: it kept `conventional_commits = false`
+# and gave the parsers the `[kind]` form directly. The groups were correct, but **every
+# release was a patch**, also with a feature in it (measured: a range with one `[feat]`
+# gave 1.0.1 and not 1.1.0). Without the conventional form git-cliff has no type to
+# decide a bump with, and `custom_minor_increment_regex` did not help.
+#
+# A useful effect: with the conventional form, `commit.message` is the text without the
+# `[kind]`, so the template needs no split.
 
 [changelog]
 header = "# Changelog\n\n"
@@ -16,33 +28,46 @@ body = """
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group }}
 {% for commit in commits %}
-- {{ commit.message | split(pat="\n") | first | split(pat="] ") | last | trim }} ({{ commit.id | truncate(length=7, end="") }})
+- {{ commit.message | split(pat="\n") | first | trim }} ({{ commit.id | truncate(length=7, end="") }})
 {%- endfor %}
 {% endfor %}"""
 trim = true
 
 [git]
-conventional_commits = false
+conventional_commits = true
 filter_unconventional = false
+commit_preprocessors = [
+  { pattern = "^\\[feat!\\]", replace = "feat!:" },
+  { pattern = "^\\[feat\\]", replace = "feat:" },
+  { pattern = "^\\[fix\\]", replace = "fix:" },
+  { pattern = "^\\[perf\\]", replace = "perf:" },
+  { pattern = "^\\[refactor\\]", replace = "refactor:" },
+  { pattern = "^\\[docs\\]", replace = "docs:" },
+  { pattern = "^\\[style\\]", replace = "style:" },
+  { pattern = "^\\[test\\]", replace = "test:" },
+  { pattern = "^\\[build\\]", replace = "build:" },
+  { pattern = "^\\[ci\\]", replace = "ci:" },
+  { pattern = "^\\[chore\\]", replace = "chore:" },
+]
 # The order decides the group, so the first match wins.
 commit_parsers = [
-  # A merge commit says nothing that its commits do not say already.
   { message = "^Merge (pull request|branch|remote)", skip = true },
-  { message = "^\\[feat!?\\]", group = "✨ Features" },
-  { message = "^\\[fix\\]", group = "🐛 Fixes" },
-  { message = "^\\[perf\\]", group = "⚡ Performance" },
-  { message = "^\\[refactor\\]", group = "♻️ Refactoring" },
-  { message = "^\\[docs\\]", group = "📝 Documentation" },
-  { message = "^\\[style\\]", group = "💄 Style" },
-  { message = "^\\[test\\]", group = "✅ Tests" },
-  { message = "^\\[build\\]|^\\[ci\\]", group = "🔧 Build and CI" },
-  { message = "^\\[chore\\]", skip = true },
+  { message = "^feat", group = "✨ Features" },
+  { message = "^fix", group = "🐛 Fixes" },
+  { message = "^perf", group = "⚡ Performance" },
+  { message = "^refactor", group = "♻️ Refactoring" },
+  { message = "^docs", group = "📝 Documentation" },
+  { message = "^style", group = "💄 Style" },
+  { message = "^test", group = "✅ Tests" },
+  { message = "^build|^ci", group = "🔧 Build and CI" },
+  { message = "^chore", skip = true },
   { message = ".*", group = "📦 Other" },
 ]
 tag_pattern = "[0-9]*"
 sort_commits = "oldest"
 
 [bump]
-# major only with an explicit mark, minor for a feature, patch for everything else.
-custom_major_increment_regex = "^\\[feat!\\]|BREAKING CHANGE"
-custom_minor_increment_regex = "^\\[feat\\]"
+# `[feat]` gives a minor and `[feat!]` (or `BREAKING CHANGE` in the body) gives a major,
+# also below 1.0. Everything else gives a patch.
+features_always_bump_minor = true
+breaking_always_bump_major = true
