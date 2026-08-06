@@ -12,6 +12,13 @@ use crate::json;
 /// Type of the request for comments.
 pub const COMMENTS: &str = "dt/comments";
 
+/// The page asks for the CSS because the master switch went on while it was open.
+///
+/// The service worker removes every registration while the extension is off, so a page
+/// that loaded in that state has no CSS at all. A registration only reaches the next
+/// page load, so the worker puts the CSS into the tab of the sender.
+pub const ENABLE_NOW: &str = "dt/enable-now";
+
 /// The request for comments.
 pub struct CommentQuery<'a> {
     /// The dAnime partId. Also the key of the cache.

@@ -382,9 +382,27 @@ html.dt-off .dt-card { display: none !important }
 Without this rule, the own elements stay without a style. The result looks worse
 than the normal site.
 
-The content script adds `dt-off` when the master switch is off. The content
-script also listens to `chrome.storage.onChanged`, so an open tab returns to the
-normal site immediately.
+The content script adds `dt-off` when the master switch is off. The content script also
+listens to `chrome.storage.onChanged`, so an open tab returns to the normal site
+immediately.
+
+### The switch also works in the other direction
+
+A page that was open when the switch went off has everything it needs: the CSS is in the
+document and the own elements are in the DOM, so `dt-off` alone hides and shows them.
+
+A page that **loaded** while the extension was off has neither. The service worker removes
+every registration in that state, so no CSS arrived, and the content script returned
+before it built anything. A registration reaches the next load only, so removing `dt-off`
+would show nothing.
+
+For that page the content script asks the service worker (`messages::ENABLE_NOW`), which
+puts the CSS of the enabled features into the tab of the sender with
+`chrome.scripting.insertCSS`. The content script then runs `install_all`. A flag
+(`INSTALLED`) makes sure that a page builds one time only.
+
+A change of a single feature still needs a reload. Only the master switch has this path,
+because only it leaves a page with nothing at all.
 
 ## Packaging
 

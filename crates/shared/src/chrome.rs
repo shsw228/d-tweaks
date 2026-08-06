@@ -27,6 +27,9 @@ extern "C" {
     #[wasm_bindgen(js_namespace = ["chrome", "scripting"], js_name = "getRegisteredContentScripts")]
     fn scripting_get_registered() -> Promise;
 
+    #[wasm_bindgen(js_namespace = ["chrome", "scripting"], js_name = "insertCSS")]
+    fn scripting_insert_css(injection: &JsValue) -> Promise;
+
     // --- declarativeNetRequest. Only the enabled state of the static rulesets. ---
     #[wasm_bindgen(js_namespace = ["chrome", "declarativeNetRequest"], js_name = "updateEnabledRulesets")]
     fn dnr_update_enabled_rulesets(options: &JsValue) -> Promise;
@@ -148,6 +151,20 @@ pub async fn registered_script_ids() -> Result<Vec<String>, JsValue> {
         }
     }
     Ok(ids)
+}
+
+/// `chrome.scripting.insertCSS` into one tab.
+///
+/// A registration reaches the next load of a page. This puts the same files into a page
+/// that is open now.
+pub async fn insert_css(tab_id: f64, files: &[&str]) -> Result<(), JsValue> {
+    let target = object_from(&[("tabId", JsValue::from_f64(tab_id))])?;
+    let injection = object_from(&[
+        ("target", target.into()),
+        ("files", string_array(files).into()),
+    ])?;
+    JsFuture::from(scripting_insert_css(injection.as_ref())).await?;
+    Ok(())
 }
 
 /// `chrome.declarativeNetRequest.updateEnabledRulesets`.
