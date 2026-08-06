@@ -5,11 +5,13 @@ name: build
 # The WASM in the archive is not readable, so the reviewer of the store needs the
 # source and a build that anyone can repeat. This workflow is that proof.
 
+# A change of the documents alone does not need a build, and a tag has its own workflow.
 on:
   push:
     branches: [main]
-    tags: ["*"]
+    paths-ignore: ["**/*.md", "LICENSE"]
   pull_request:
+    paths-ignore: ["**/*.md", "LICENSE"]
   workflow_dispatch:
 
 permissions:

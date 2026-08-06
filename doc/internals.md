@@ -32,14 +32,14 @@ Put the layout in layer 0. Only CSS can be ready before the first paint.
 
 ### Hand-written JavaScript
 
-WASM cannot start itself. Four files are JavaScript. All other logic is Rust.
+WASM cannot start itself, and MV3 accepts only JavaScript at every entry point, so three
+files are JavaScript. All other logic is Rust.
 
 | File | Task |
 |---|---|
 | `wasm-loader.js` | Start the WASM of the content script |
 | `sw.js` | Add the service worker listeners |
-| `options-loader.js` | Start the WASM of the options page |
-| `popup-loader.js` | Start the WASM of the popup |
+| `settings-loader.js` | Start the WASM of the options page and of the popup |
 
 The service worker must add the listeners in a synchronous step. If the code
 waits for the WASM, the worker loses the `onInstalled` event.
