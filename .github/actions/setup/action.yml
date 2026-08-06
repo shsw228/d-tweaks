@@ -1,0 +1,36 @@
+name: Set up the build
+description: Installs the Rust toolchain, just, wasm-pack and a pinned wasm-opt.
+
+runs:
+  using: composite
+  steps:
+    - name: Install the Rust toolchain
+      shell: bash
+      run: |
+        rustup toolchain install stable --profile minimal --component clippy,rustfmt
+        rustup target add wasm32-unknown-unknown
+
+    - uses: Swatinem/rust-cache@v2
+
+    - name: Install just and wasm-pack
+      uses: taiki-e/install-action@v2
+      with:
+        tool: just,wasm-pack
+
+    # wasm-pack takes the wasm-opt of the PATH. Its own copy can be older than the flags
+    # in the Cargo.toml of the crates (`--enable-bulk-memory-opt`), so pin the version
+    # that the local build uses.
+    - name: Install binaryen (wasm-opt)
+      shell: bash
+      run: |
+        version=version_131
+        curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/${version}/binaryen-${version}-x86_64-linux.tar.gz" | tar -xz
+        echo "${PWD}/binaryen-${version}/bin" >> "${GITHUB_PATH}"
+
+    - name: Show the versions
+      shell: bash
+      run: |
+        rustc --version
+        wasm-pack --version
+        wasm-opt --version
+        just --version

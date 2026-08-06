@@ -29,6 +29,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use web_sys::{Document, Element};
 
+use crate::dom::{element, text_of};
 use crate::log;
 
 /// Marks the page as drawn. The CSS hides the original DOM only with this class.
@@ -96,18 +97,6 @@ fn strip_prefix_label<'a>(text: &'a str, label: &str) -> Option<&'a str> {
     let text = text.trim();
     let head = format!("[{label}]");
     text.strip_prefix(&head).map(str::trim)
-}
-
-fn text_of(root: &Element, selector: &str) -> Option<String> {
-    let el = root.query_selector(selector).ok()??;
-    let text = el.text_content()?.trim().to_string();
-    if text.is_empty() { None } else { Some(text) }
-}
-
-fn element(document: &Document, tag: &str, class: &str) -> Result<Element, JsValue> {
-    let el = document.create_element(tag)?;
-    el.set_class_name(class);
-    Ok(el)
 }
 
 /// A block with a heading.

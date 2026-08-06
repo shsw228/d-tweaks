@@ -36,6 +36,7 @@ use web_sys::{Document, Element, HtmlIFrameElement, Response};
 use d_tweaks_shared::messages::{CommentQuery, CommentReply, parse_reply};
 use d_tweaks_shared::{chrome, json, settings};
 
+use crate::dom::attr;
 use crate::features::{danmaku, frame};
 use crate::{log, sleep};
 
@@ -61,10 +62,6 @@ pub struct Target {
     pub work_title: Option<String>,
     /// `第363話`, `第十四回`.
     pub episode_label: Option<String>,
-}
-
-fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute(name).filter(|v| !v.trim().is_empty())
 }
 
 fn page_work_title(document: &Document) -> Option<String> {
@@ -155,7 +152,11 @@ struct PartInfo {
 /// `partDispNumber` returns `第241話` and also `6` (measured). A bare number is not
 /// usable: it is also inside `第16話`, and the head bar would show only a number. Only
 /// digits become `第N話`; every other form stays (`第十四回`).
-fn episode_label(raw: Option<String>) -> Option<String> {
+///
+/// `player_meta` shows the same value in the head bar, so it uses this function.
+/// `top_page` has its own rule: it takes the number from the `partId` when the site
+/// gives a broken label, which only that page needs.
+pub(crate) fn episode_label(raw: Option<String>) -> Option<String> {
     let text = raw?.trim().to_string();
     if text.is_empty() {
         return None;

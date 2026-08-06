@@ -33,6 +33,7 @@ use web_sys::{
     MutationObserverInit, Url,
 };
 
+use crate::dom::{element, text_of};
 use crate::features::comments;
 use crate::log;
 
@@ -126,17 +127,6 @@ pub(crate) struct Card {
     /// The "no change" setting wins over this (see `set_thumb`). The top page has
     /// many cards on one screen, so it asks for a small size.
     pub(crate) thumb_size: Option<&'static str>,
-}
-
-fn text_of(root: &Element, selector: &str) -> Option<String> {
-    let el = root.query_selector(selector).ok()??;
-    let text = el.text_content()?;
-    let text = text.trim();
-    if text.is_empty() {
-        None
-    } else {
-        Some(text.to_string())
-    }
 }
 
 /// The `width` of an inline style (`"width: 94%;"` gives `Some("94%")`).
@@ -444,12 +434,6 @@ fn url_for(path: &str, query: &[(&str, &str)]) -> String {
         url.push_str(value);
     }
     url
-}
-
-fn element(document: &Document, tag: &str, class: &str) -> Result<Element, JsValue> {
-    let el = document.create_element(tag)?;
-    el.set_class_name(class);
-    Ok(el)
 }
 
 /// Holds the URL that the site gave.

@@ -5,11 +5,13 @@ name: build
 # The WASM in the archive is not readable, so the reviewer of the store needs the
 # source and a build that anyone can repeat. This workflow is that proof.
 
+# A change of the documents alone does not need a build, and a tag has its own workflow.
 on:
   push:
     branches: [main]
-    tags: ["*"]
+    paths-ignore: ["**/*.md", "LICENSE"]
   pull_request:
+    paths-ignore: ["**/*.md", "LICENSE"]
   workflow_dispatch:
 
 permissions:
@@ -21,33 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install the Rust toolchain
-        run: |
-          rustup toolchain install stable --profile minimal --component clippy,rustfmt
-          rustup target add wasm32-unknown-unknown
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Install just and wasm-pack
-        uses: taiki-e/install-action@v2
-        with:
-          tool: just,wasm-pack
-
-      # wasm-pack takes the wasm-opt of the PATH. Its own copy can be older than the
-      # flags in the Cargo.toml of the crates (`--enable-bulk-memory-opt`), so pin the
-      # version that the local build uses.
-      - name: Install binaryen (wasm-opt)
-        run: |
-          version=version_131
-          curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/${version}/binaryen-${version}-x86_64-linux.tar.gz" | tar -xz
-          echo "${PWD}/binaryen-${version}/bin" >> "${GITHUB_PATH}"
-
-      - name: Show the versions
-        run: |
-          rustc --version
-          wasm-pack --version
-          wasm-opt --version
-          just --version
+      - uses: ./.github/actions/setup
 
       - name: Lint and format
         run: just check

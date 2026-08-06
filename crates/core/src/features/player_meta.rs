@@ -63,7 +63,8 @@ use web_sys::{Document, Element, HtmlIFrameElement, MouseEvent};
 
 use d_tweaks_shared::{json, settings};
 
-use crate::features::comments::{self, Target};
+use crate::dom::element;
+use crate::features::comments::{self, Target, episode_label};
 use crate::features::{controls, frame};
 use crate::{log, sleep, timestamp};
 
@@ -181,12 +182,6 @@ fn plan_of(data: &JsValue) -> Plan {
     }
 }
 
-fn element(document: &Document, tag: &str, class: &str) -> Result<Element, JsValue> {
-    let el = document.create_element(tag)?;
-    el.set_class_name(class);
-    Ok(el)
-}
-
 /// The URL of the work page, from a `partId`.
 ///
 /// A `partId` is a `workId` and three digits for the episode (measured on the top
@@ -197,20 +192,6 @@ fn work_url(part_id: &str) -> Option<String> {
     }
     let work_id = &part_id[..part_id.len() - 3];
     Some(format!("/animestore/ci_pc?workId={work_id}"))
-}
-
-/// The episode number. `WS010105` returns only the number, such as `6`.
-fn episode_label(raw: Option<String>) -> Option<String> {
-    let raw = raw?;
-    let text = raw.trim();
-    if text.is_empty() {
-        return None;
-    }
-    if text.chars().all(|c| c.is_ascii_digit()) {
-        Some(format!("第{text}話"))
-    } else {
-        Some(text.to_string())
-    }
 }
 
 /// The range of the main story (`mainStory` of `chapters`).
@@ -484,9 +465,8 @@ fn install_skip_click(skip: &Element, frame: &HtmlIFrameElement) -> Result<(), J
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        Action, Chapter, MIN_TIME_TO_SKIP_DEFAULT, Plan, episode_label, skip_at, work_url,
-    };
+    use super::{Action, Chapter, MIN_TIME_TO_SKIP_DEFAULT, Plan, skip_at, work_url};
+    use crate::features::comments::episode_label;
 
     /// Chapters for a test. `showInterface` is true and the limit is 15 seconds.
     fn planned(chapters: &[(&str, f64, f64)], has_next: bool) -> Plan {

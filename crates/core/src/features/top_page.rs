@@ -66,6 +66,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{Document, Element, HtmlAnchorElement, HtmlElement, MouseEvent, Url};
 
+use crate::dom::{attr, element, text_of};
 use crate::features::card_view::{self, Badge, Card};
 use crate::log;
 
@@ -142,26 +143,6 @@ struct Section {
     items: Vec<Card>,
     /// Summaries (`data-workexp`) for the showcase, in the order of `items`.
     exps: Vec<Option<String>>,
-}
-
-fn text_of(root: &Element, selector: &str) -> Option<String> {
-    let text = root.query_selector(selector).ok()??.text_content()?;
-    let text = text.trim();
-    if text.is_empty() {
-        None
-    } else {
-        Some(text.to_string())
-    }
-}
-
-fn attr(el: &Element, name: &str) -> Option<String> {
-    el.get_attribute(name).filter(|v| !v.trim().is_empty())
-}
-
-fn element(document: &Document, tag: &str, class: &str) -> Result<Element, JsValue> {
-    let el = document.create_element(tag)?;
-    el.set_class_name(class);
-    Ok(el)
 }
 
 /// Move one item into a card. Returns (card, summary).

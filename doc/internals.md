@@ -30,16 +30,20 @@ Put the layout in layer 0. Only CSS can be ready before the first paint.
 | `background` | Service worker |
 | `options` | Settings UI for the options page and the toolbar popup |
 
+`crates/core/src/dom.rs` holds the DOM helpers that every feature needs (`document`,
+`element`, `text_of`, `attr`). Each of those was a private copy in five to seven
+modules before.
+
 ### Hand-written JavaScript
 
-WASM cannot start itself. Four files are JavaScript. All other logic is Rust.
+WASM cannot start itself, and MV3 accepts only JavaScript at every entry point, so three
+files are JavaScript. All other logic is Rust.
 
 | File | Task |
 |---|---|
 | `wasm-loader.js` | Start the WASM of the content script |
 | `sw.js` | Add the service worker listeners |
-| `options-loader.js` | Start the WASM of the options page |
-| `popup-loader.js` | Start the WASM of the popup |
+| `settings-loader.js` | Start the WASM of the options page and of the popup |
 
 The service worker must add the listeners in a synchronous step. If the code
 waits for the WASM, the worker loses the `onInstalled` event.
@@ -75,6 +79,12 @@ disabled feature for a short time. A dynamic registration prevents this effect.
 The service worker registers again after `onInstalled`, `onStartup` and
 `storage.onChanged`.
 
+**A CSS file must be complete on its own.** Its feature can be the only one that is on,
+so a file may not depend on a rule of another file. A few small rules therefore repeat
+between the files (the lift of a card on hover, the play icon, the colour of a link on
+hover). Do not move them into a shared file: that file would need a registration from
+four features, and a feature that is off would then still bring it.
+
 ### Synchronous test for the master switch
 
 The content script must know the master switch before the first paint. The
@@ -101,6 +111,12 @@ and the master switch stops both.
 Chrome keeps the enabled state across sessions but **not across an update of the
 extension**: an update uses the state of the manifest again. `onInstalled` also
 arrives on an update, and it runs the same synchronisation, so the state returns.
+
+The `nico-ua` rule works on a request of the extension itself. The documentation does
+not say if that is possible, so it was measured: the Network panel of the service
+worker shows the `User-Agent` of the extension on the search request. The other two
+requests to nicovideo keep the `User-Agent` of Chrome, because the rule matches one
+address only.
 
 The `csp` rule replaces the complete header, because CSP has no operation that
 weakens one directive. So the value in `rules.json` is a copy of the CSP of the
@@ -352,7 +368,11 @@ extension after a build.** The message of the loader names this cause.
 
 ## Kill switch
 
-All CSS rules start with `html:not(.dt-off)`. Each file also has a rule to hide
+All CSS rules start with `html:not(.dt-off)`. A rule that starts with another class of
+the extension also needs it: the master switch can go off while a page is open, and then
+only `dt-off` arrives. `infinite-scroll.css` had that defect. Its rule
+`html.dt-infinite .paging { display: none }` kept the paging of the site hidden after the
+switch went off, because `dt-infinite` stays on the element. Each file also has a rule to hide
 the own elements:
 
 ```css

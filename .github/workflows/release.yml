@@ -26,23 +26,7 @@ jobs:
             exit 1
           fi
 
-      - name: Install the Rust toolchain
-        run: |
-          rustup toolchain install stable --profile minimal --component clippy,rustfmt
-          rustup target add wasm32-unknown-unknown
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Install just and wasm-pack
-        uses: taiki-e/install-action@v2
-        with:
-          tool: just,wasm-pack
-
-      - name: Install binaryen (wasm-opt)
-        run: |
-          version=version_131
-          curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/${version}/binaryen-${version}-x86_64-linux.tar.gz" | tar -xz
-          echo "${PWD}/binaryen-${version}/bin" >> "${GITHUB_PATH}"
+      - uses: ./.github/actions/setup
 
       - name: Lint and format
         run: just check
@@ -55,7 +39,16 @@ jobs:
 
       # The archive of a release must be the one that the store receives, so it comes
       # from this build and not from a machine.
+      # A tag can arrive a second time, for example after a correction of the history, and
+      # then the release exists already. `gh release create` fails on that, so the step
+      # replaces the archive instead.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" dist/*.zip --title "${GITHUB_REF_NAME}" --generate-notes
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" dist/*.zip --clobber
+          else
+            gh release create "${tag}" dist/*.zip --title "${tag}" --generate-notes
+          fi

@@ -9,8 +9,12 @@
  * stays. After a failed request, the WASM also removes dt-infinite and the paging returns.
  */
 
-/* The pages arrive without the paging, so hide it */
-html.dt-infinite .paging {
+/* The pages arrive without the paging, so hide it.
+ *
+ * The `:not(.dt-off)` is necessary. The master switch can go off while the page is open,
+ * and then the WASM only adds `dt-off`: `dt-infinite` stays on the element. Without this
+ * prefix, the paging of the site would stay hidden with the extension off. */
+html.dt-infinite:not(.dt-off) .paging {
   display: none !important;
 }
 
@@ -25,4 +29,16 @@ html.dt-infinite .dt-infinite-status {
 html.dt-infinite .dt-infinite-sentinel {
   width: 100%;
   height: 1px;
+}
+
+/* ---------------------------------------------------------------- *
+ * Kill switch (html.dt-off)
+ *
+ * The own elements go with the extension. The paging of the site comes back through the
+ * `:not(.dt-off)` above.
+ * ---------------------------------------------------------------- */
+
+html.dt-off .dt-infinite-status,
+html.dt-off .dt-infinite-sentinel {
+  display: none !important;
 }

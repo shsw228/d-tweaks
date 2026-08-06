@@ -44,10 +44,11 @@ use std::rc::Rc;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{Document, Element, HtmlElement, HtmlIFrameElement, KeyboardEvent, MouseEvent};
+use web_sys::{Element, HtmlElement, HtmlIFrameElement, KeyboardEvent, MouseEvent};
 
 use d_tweaks_shared::{chrome, json};
 
+use crate::dom::{document, element};
 use crate::features::{comments, controls, frame, player_meta};
 use crate::{log, sleep};
 
@@ -63,18 +64,6 @@ const CLOSING_CLASS: &str = "dt-modal--closing";
 const UNLOAD_GRACE_MS: i32 = 300;
 /// The play link. Keep it the same as the class that `card_view` adds.
 const PLAY_LINK_SELECTOR: &str = "a.dt-card__main";
-
-fn document() -> Result<Document, JsValue> {
-    web_sys::window()
-        .and_then(|w| w.document())
-        .ok_or_else(|| JsValue::from_str("no document"))
-}
-
-fn element(document: &Document, tag: &str, class: &str) -> Result<Element, JsValue> {
-    let el = document.create_element(tag)?;
-    el.set_class_name(class);
-    Ok(el)
-}
 
 /// Width of the side column. Keep it the same as the default in `player-modal.css`.
 const SIDE_WIDTH_DEFAULT: f64 = 340.0;
