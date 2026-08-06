@@ -368,7 +368,11 @@ extension after a build.** The message of the loader names this cause.
 
 ## Kill switch
 
-All CSS rules start with `html:not(.dt-off)`. Each file also has a rule to hide
+All CSS rules start with `html:not(.dt-off)`. A rule that starts with another class of
+the extension also needs it: the master switch can go off while a page is open, and then
+only `dt-off` arrives. `infinite-scroll.css` had that defect. Its rule
+`html.dt-infinite .paging { display: none }` kept the paging of the site hidden after the
+switch went off, because `dt-infinite` stays on the element. Each file also has a rule to hide
 the own elements:
 
 ```css
