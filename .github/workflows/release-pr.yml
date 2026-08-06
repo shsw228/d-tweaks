@@ -1,0 +1,103 @@
+name: release-pr
+
+# Keeps a "Release x.y.z" pull request open with the next version and the changelog.
+#
+# git-cliff reads the commits since the last tag and decides the next version, so nobody
+# types a version number. The pull request is the one place where a human decides: merge
+# it and the release goes out (release.yml), leave it and the changes wait.
+#
+# The version belongs to extension/manifest.json, because that is the file that the store
+# reads. Cargo.toml and Cargo.lock follow it.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-pr
+  cancel-in-progress: false
+
+jobs:
+  release-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+
+      - name: Decide the next version
+        id: version
+        run: |
+          current=$(python3 -c 'import json;print(json.load(open("extension/manifest.json"))["version"])')
+          next=$(git cliff --bumped-version 2>/dev/null || true)
+          echo "current=${current}" >> "${GITHUB_OUTPUT}"
+          echo "next=${next}" >> "${GITHUB_OUTPUT}"
+          echo "現在 ${current} / 次 ${next}"
+          if [ -z "${next}" ] || [ "${next}" = "${current}" ]; then
+            echo "todo=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "todo=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      # The Rust toolchain is only here to write the version into Cargo.lock.
+      - uses: ./.github/actions/setup
+        if: steps.version.outputs.todo == 'true'
+
+      - name: Write the version and the changelog
+        if: steps.version.outputs.todo == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.next }}
+        run: |
+          python3 - "${VERSION}" <<'PY'
+          import json, pathlib, re, sys
+          version = sys.argv[1]
+
+          manifest = pathlib.Path("extension/manifest.json")
+          text = re.sub(r'("version":\s*")[^"]+(")', rf'\g<1>{version}\g<2>', manifest.read_text(), count=1)
+          manifest.write_text(text)
+          assert json.loads(text)["version"] == version
+
+          cargo = pathlib.Path("Cargo.toml")
+          cargo.write_text(re.sub(r'(?m)^version = "[^"]+"$', f'version = "{version}"', cargo.read_text(), count=1))
+          PY
+          cargo update --workspace --quiet
+          git cliff --tag "${VERSION}" -o CHANGELOG.md
+
+      - name: Open or update the release pull request
+        if: steps.version.outputs.todo == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.next }}
+        run: |
+          branch="release/${VERSION}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "${branch}"
+          git add -A
+          git commit -m "[chore] バージョンを ${VERSION} に上げる"
+          git push --force origin "${branch}"
+
+          body=$(git cliff --tag "${VERSION}" --unreleased --strip all)
+          if gh pr view "${branch}" >/dev/null 2>&1; then
+            gh pr edit "${branch}" --title "[chore] Release ${VERSION}" --body "${body}"
+          else
+            gh pr create --base main --head "${branch}" --title "[chore] Release ${VERSION}" --body "${body}"
+          fi
+
+          # A commit can change the next version (a `[feat]` after a `[fix]`), and then the
+          # branch has another name. Close the pull request of the version before, so that
+          # only one release waits at a time.
+          gh pr list --state open --json number,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"release/\")) | select(.headRefName != \"${branch}\") | .number" \
+            | while read -r number; do
+                gh pr close "${number}" --delete-branch --comment "版が ${VERSION} に変わったので閉じます。"
+              done
