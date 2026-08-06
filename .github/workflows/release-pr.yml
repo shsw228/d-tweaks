@@ -48,10 +48,6 @@ jobs:
             echo "todo=true" >> "${GITHUB_OUTPUT}"
           fi
 
-      # The Rust toolchain is only here to write the version into Cargo.lock.
-      - uses: ./.github/actions/setup
-        if: steps.version.outputs.todo == 'true'
-
       - name: Write the version and the changelog
         if: steps.version.outputs.todo == 'true'
         env:
@@ -69,6 +65,7 @@ jobs:
           cargo = pathlib.Path("Cargo.toml")
           cargo.write_text(re.sub(r'(?m)^version = "[^"]+"$', f'version = "{version}"', cargo.read_text(), count=1))
           PY
+          # cargo is on the runner, so the version of Cargo.lock needs no toolchain step.
           cargo update --workspace --quiet
           git cliff --tag "${VERSION}" -o CHANGELOG.md
 
@@ -82,7 +79,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "${branch}"
-          git add -A
+          # Name the files. `git add -A` would also take whatever a step left in the
+          # working tree.
+          git add extension/manifest.json Cargo.toml Cargo.lock CHANGELOG.md
           git commit -m "[chore] バージョンを ${VERSION} に上げる"
           git push --force origin "${branch}"
 

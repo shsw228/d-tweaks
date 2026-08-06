@@ -22,10 +22,12 @@ runs:
     # that the local build uses.
     - name: Install binaryen (wasm-opt)
       shell: bash
+      # Into the temporary directory of the runner and not into the checkout: a job that
+      # commits must not find 60MB of binaries in the working tree.
       run: |
         version=version_131
-        curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/${version}/binaryen-${version}-x86_64-linux.tar.gz" | tar -xz
-        echo "${PWD}/binaryen-${version}/bin" >> "${GITHUB_PATH}"
+        curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/${version}/binaryen-${version}-x86_64-linux.tar.gz" | tar -xz -C "${RUNNER_TEMP}"
+        echo "${RUNNER_TEMP}/binaryen-${version}/bin" >> "${GITHUB_PATH}"
 
     - name: Show the versions
       shell: bash
