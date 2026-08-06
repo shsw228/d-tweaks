@@ -9,6 +9,7 @@
 //! This crate does the work that CSS cannot do: parse the DOM, build own elements,
 //! ask the REST interfaces, and hold the state.
 
+mod dom;
 mod features;
 mod page;
 

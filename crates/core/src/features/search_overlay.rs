@@ -55,6 +55,7 @@ use web_sys::{
 
 use d_tweaks_shared::{json, settings};
 
+use crate::dom::{document, element};
 use crate::features::card_view::{self, Badge, Card};
 use crate::log;
 
@@ -229,18 +230,6 @@ async fn save_no_rental(value: bool) {
             "レンタル除外の設定を保存できませんでした: {err:?}"
         ));
     }
-}
-
-fn document() -> Result<Document, JsValue> {
-    web_sys::window()
-        .and_then(|w| w.document())
-        .ok_or_else(|| JsValue::from_str("no document"))
-}
-
-fn element(document: &Document, tag: &str, class: &str) -> Result<Element, JsValue> {
-    let el = document.create_element(tag)?;
-    el.set_class_name(class);
-    Ok(el)
 }
 
 /// The float search, or `None` if it is absent.

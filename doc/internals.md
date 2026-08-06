@@ -30,6 +30,10 @@ Put the layout in layer 0. Only CSS can be ready before the first paint.
 | `background` | Service worker |
 | `options` | Settings UI for the options page and the toolbar popup |
 
+`crates/core/src/dom.rs` holds the DOM helpers that every feature needs (`document`,
+`element`, `text_of`, `attr`). Each of those was a private copy in five to seven
+modules before.
+
 ### Hand-written JavaScript
 
 WASM cannot start itself, and MV3 accepts only JavaScript at every entry point, so three
@@ -74,6 +78,12 @@ disabled feature for a short time. A dynamic registration prevents this effect.
 
 The service worker registers again after `onInstalled`, `onStartup` and
 `storage.onChanged`.
+
+**A CSS file must be complete on its own.** Its feature can be the only one that is on,
+so a file may not depend on a rule of another file. A few small rules therefore repeat
+between the files (the lift of a card on hover, the play icon, the colour of a link on
+hover). Do not move them into a shared file: that file would need a registration from
+four features, and a feature that is off would then still bring it.
 
 ### Synchronous test for the master switch
 

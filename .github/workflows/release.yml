@@ -26,23 +26,7 @@ jobs:
             exit 1
           fi
 
-      - name: Install the Rust toolchain
-        run: |
-          rustup toolchain install stable --profile minimal --component clippy,rustfmt
-          rustup target add wasm32-unknown-unknown
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Install just and wasm-pack
-        uses: taiki-e/install-action@v2
-        with:
-          tool: just,wasm-pack
-
-      - name: Install binaryen (wasm-opt)
-        run: |
-          version=version_131
-          curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/${version}/binaryen-${version}-x86_64-linux.tar.gz" | tar -xz
-          echo "${PWD}/binaryen-${version}/bin" >> "${GITHUB_PATH}"
+      - uses: ./.github/actions/setup
 
       - name: Lint and format
         run: just check

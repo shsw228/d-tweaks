@@ -27,6 +27,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use web_sys::{Document, Element, HtmlAnchorElement, MutationObserver, MutationObserverInit};
 
+use crate::dom::{element, text_of};
 use crate::log;
 
 /// Marks the page as drawn. The CSS hides the original DOM only with this class.
@@ -37,12 +38,6 @@ const HERO_IMAGE_SIZE: &str = "10";
 const CURRENT_CLASS: &str = "is-current";
 /// Interval between the images. Text is over them, so this is slow.
 const SLIDE_INTERVAL_MS: i32 = 7000;
-
-fn text_of(root: &Element, selector: &str) -> Option<String> {
-    let el = root.query_selector(selector).ok()??;
-    let text = el.text_content()?.trim().to_string();
-    if text.is_empty() { None } else { Some(text) }
-}
 
 fn href_of(root: &Element, selector: &str) -> Option<String> {
     let el = root.query_selector(selector).ok()??;
@@ -76,12 +71,6 @@ fn upgrade_key_visual(url: &str) -> Option<String> {
         upgraded.push_str(query);
     }
     Some(upgraded)
-}
-
-fn element(document: &Document, tag: &str, class: &str) -> Result<Element, JsValue> {
-    let el = document.create_element(tag)?;
-    el.set_class_name(class);
-    Ok(el)
 }
 
 /// Add one chip of the meta row (`1080p`, a rank).
