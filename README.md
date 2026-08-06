@@ -125,23 +125,28 @@ push and pull request, so a clean checkout must build. The archive stays as an a
 of the run. The workflow installs a pinned `wasm-opt`, because the copy inside wasm-pack
 can be older than the flags that the crates use.
 
-A tag starts a release. The version belongs to `extension/manifest.json`; the tag is only
-a mark on the commit that has it.
+Nobody types a version number. `.github/workflows/release-pr.yml` reads the commits since
+the last tag with git-cliff, decides the next version, writes it into
+`extension/manifest.json` (and into Cargo), writes `CHANGELOG.md`, and keeps a
+**"Release x.y.z" pull request** open.
 
-```sh
-just release 1.1.0        # writes the version, verifies, commits and tags
-git push origin main 1.1.0
-```
+That pull request is the only decision: merge it and `.github/workflows/release.yml` sees
+a version without a tag, builds, makes the tag, and publishes a GitHub release with the
+archive. Leave it and the changes wait for the next one.
 
-`.github/workflows/release.yml` then verifies that the tag and the manifest agree, builds,
-and makes a GitHub release with the archive. An upload to the store is not automatic.
+The trigger of the release is a push to main and not a tag, because a tag that a workflow
+pushes with the default token does not start another workflow.
+
+An upload to the store is not automatic.
+
+The next version comes from the kinds of the commits:
 
 | Part | When |
 |---|---|
-| major | The stored settings or data are no longer compatible, or the default look changes a lot |
-| minor | A new feature or a new setting |
-| patch | Corrections only |
-| fourth part | The same content needs one more upload (an answer to a store review) |
+| major | A commit with `[feat!]` or with `BREAKING CHANGE` in its body |
+| minor | A commit with `[feat]` |
+| patch | Everything else |
+| fourth part | Manual. The same content needs one more upload (an answer to a store review). |
 
 A Chrome version is one to four integers (each 0 to 65535, no leading zero). A suffix
 such as `-rc.1` is not valid. The store never accepts the same version twice.

@@ -1,54 +1,82 @@
 name: release
 
-# A tag starts a release. `just release <version>` writes the version into
-# `extension/manifest.json`, commits, and makes the tag, so the tag is only a mark on a
-# commit that already has the correct version. The first step here proves that.
+# Builds and publishes when the version of the manifest has no tag yet, which happens
+# right after a release pull request is merged.
+#
+# The trigger is a push to main and not a tag. A tag that a workflow pushes with the
+# default token does not start another workflow, so a tag cannot be the entry point here.
+# This job makes the tag itself.
 
 on:
   push:
-    tags: ["*"]
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
-      - name: The tag and the manifest must agree
+      - name: Is there a version without a tag?
+        id: check
         run: |
           version=$(python3 -c 'import json;print(json.load(open("extension/manifest.json"))["version"])')
-          echo "tag=${GITHUB_REF_NAME} manifest=${version}"
-          if [ "${GITHUB_REF_NAME}" != "${version}" ]; then
-            echo "タグ名と manifest.json の version が違います" >&2
-            exit 1
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          if git rev-parse -q --verify "refs/tags/${version}" >/dev/null; then
+            echo "リリース済み: ${version}"
+            echo "todo=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "未リリース: ${version}"
+            echo "todo=true" >> "${GITHUB_OUTPUT}"
           fi
 
       - uses: ./.github/actions/setup
+        if: steps.check.outputs.todo == 'true'
+
+      - uses: taiki-e/install-action@v2
+        if: steps.check.outputs.todo == 'true'
+        with:
+          tool: git-cliff
 
       - name: Lint and format
+        if: steps.check.outputs.todo == 'true'
         run: just check
 
       - name: Test
+        if: steps.check.outputs.todo == 'true'
         run: just test
 
       - name: Package
+        if: steps.check.outputs.todo == 'true'
         run: just package
 
-      # The archive of a release must be the one that the store receives, so it comes
-      # from this build and not from a machine.
-      # A tag can arrive a second time, for example after a correction of the history, and
-      # then the release exists already. `gh release create` fails on that, so the step
-      # replaces the archive instead.
-      - name: Publish the release
+      # The archive of a release comes from this build and never from a machine.
+      - name: Tag and publish
+        if: steps.check.outputs.todo == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.check.outputs.version }}
         run: |
-          tag="${GITHUB_REF_NAME}"
-          if gh release view "${tag}" >/dev/null 2>&1; then
-            gh release upload "${tag}" dist/*.zip --clobber
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "${VERSION}"
+          git push origin "${VERSION}"
+
+          git cliff --current --strip all -o release-notes.md
+          # A tag can arrive a second time, for example after a correction of the history,
+          # and then the release exists already.
+          if gh release view "${VERSION}" >/dev/null 2>&1; then
+            gh release upload "${VERSION}" dist/*.zip --clobber
           else
-            gh release create "${tag}" dist/*.zip --title "${tag}" --generate-notes
+            gh release create "${VERSION}" dist/*.zip --title "${VERSION}" --notes-file release-notes.md
           fi
