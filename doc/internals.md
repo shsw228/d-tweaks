@@ -102,6 +102,12 @@ Chrome keeps the enabled state across sessions but **not across an update of the
 extension**: an update uses the state of the manifest again. `onInstalled` also
 arrives on an update, and it runs the same synchronisation, so the state returns.
 
+The `nico-ua` rule works on a request of the extension itself. The documentation does
+not say if that is possible, so it was measured: the Network panel of the service
+worker shows the `User-Agent` of the extension on the search request. The other two
+requests to nicovideo keep the `User-Agent` of Chrome, because the rule matches one
+address only.
+
 The `csp` rule replaces the complete header, because CSP has no operation that
 weakens one directive. So the value in `rules.json` is a copy of the CSP of the
 site with `'self'` added. **Read the CSP of the site again after a change of the

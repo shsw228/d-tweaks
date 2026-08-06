@@ -43,32 +43,7 @@ entries, and the code can remove an entry too early.
 **Effect if not corrected:** the cache holds less than 20 videos. The comments
 are correct.
 
-## 3. The `User-Agent` rule is not measured
-
-**Where:** `extension/rules-nico.json`, `crates/background/src/niconico.rs`
-
-The search interface of nicovideo requires the name of the application in the
-`User-Agent`. A `fetch` cannot set that header (the browser forbids it), so a
-`declarativeNetRequest` rule sets it for the one endpoint that this extension asks.
-
-Three facts say that this works, but none of them is a measurement of the header:
-
-- `user-agent` is in the list of headers that a rule may change.
-- Chrome 111 and later apply the rules of one extension to the background requests
-  of another extension, so a request of an extension does reach the rule matcher.
-- The access test of Chromium accepts a URL whose origin is the origin of the
-  extension itself, so the initiator of an own request should pass.
-
-The rule cannot break the search: the same request with the `User-Agent` of the rule
-and with the `User-Agent` of Chrome gives the same two candidates (measured with
-curl).
-
-**How to measure:** open the service worker in DevTools, ask for the comments of one
-episode, and read the request headers of the search request in the Network panel. If
-the header is the one of Chrome, the rule does nothing, and the `_context` parameter
-stays the only identification.
-
-## 4. The CSP rule replaces the complete header
+## 3. The CSP rule replaces the complete header
 
 **Where:** `extension/rules.json`
 
@@ -83,7 +58,7 @@ time small, but it does not remove the problem.
 `frame-src` of that value. `declarativeNetRequest` cannot do this (a rule is
 static), so it needs another mechanism.
 
-## 5. `let _ =` on the DOM operations
+## 4. `let _ =` on the DOM operations
 
 **Where:** all of `crates/core`
 
