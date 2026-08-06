@@ -34,6 +34,14 @@ use page::PageKind;
 pub(crate) const LIST_SELECTOR: &str =
     ":is(.contentsWrapper, .pageWrapper) > .itemWrapper.clearfix:not(.onlySpLayout)";
 
+thread_local! {
+    /// Has `install_all` run on this page?
+    ///
+    /// The master switch can go on while the page is open, and then the page must build
+    /// the own UI without a reload. The flag stops a second build.
+    static INSTALLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// The kill switch. Every CSS file tests this class.
 const OFF_CLASS: &str = "dt-off";
 
@@ -229,15 +237,48 @@ fn watch_enabled() {
                 return;
             };
             apply_off(!enabled);
-            if enabled {
-                log("全体を有効にしました（自前 UI はページを再読み込みすると出ます）");
-            } else {
+            if !enabled {
                 log("全体を無効にしました（サイト本来の表示に戻しました）");
+                return;
             }
+            if INSTALLED.get() {
+                // The page was built before the switch went off, so the elements and the
+                // CSS are still here. Removing `dt-off` is the whole work.
+                log("全体を有効にしました");
+                return;
+            }
+            // The page loaded while the extension was off, so it has no CSS and no own
+            // UI. The registration of the service worker only reaches the next load, so
+            // ask it to put the CSS into this tab, and then build.
+            wasm_bindgen_futures::spawn_local(async {
+                match request_css().await {
+                    Ok(()) => match install_all() {
+                        Ok(()) => log("全体を有効にしました（再読み込みなしで組みました）"),
+                        Err(err) => log(&format!("有効化のあとの初期化に失敗: {err:?}")),
+                    },
+                    Err(err) => log(&format!(
+                        "CSS を入れられませんでした（ページを再読み込みしてください）: {err:?}"
+                    )),
+                }
+            });
         });
     d_tweaks_shared::chrome::on_storage_changed(on_change.as_ref());
     // Listen as long as the page lives
     on_change.forget();
+}
+
+/// Ask the service worker for the CSS of this page.
+async fn request_css() -> Result<(), JsValue> {
+    let message = d_tweaks_shared::json::object(&[(
+        "type",
+        JsValue::from_str(d_tweaks_shared::messages::ENABLE_NOW),
+    )])?;
+    let reply = d_tweaks_shared::chrome::send_message(&message.into()).await?;
+    if d_tweaks_shared::json::get(&reply, "ok").and_then(|v| v.as_bool()) == Some(true) {
+        Ok(())
+    } else {
+        Err(reply)
+    }
 }
 
 fn run() -> Result<(), JsValue> {
@@ -277,6 +318,9 @@ fn run() -> Result<(), JsValue> {
 }
 
 fn install_all() -> Result<(), JsValue> {
+    if INSTALLED.replace(true) {
+        return Ok(());
+    }
     let window = web_sys::window().ok_or_else(|| JsValue::from_str("no window"))?;
     let document = window
         .document()

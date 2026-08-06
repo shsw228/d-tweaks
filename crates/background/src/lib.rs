@@ -193,8 +193,8 @@ pub fn on_startup() {
 /// An exception would stop `sw.js` from sending a reply, and the sender would wait for
 /// ever, so this function always returns a value. A failure is an error reply.
 #[wasm_bindgen]
-pub async fn on_message(message: JsValue) -> JsValue {
-    match handle(&message).await {
+pub async fn on_message(message: JsValue, sender: JsValue) -> JsValue {
+    match handle(&message, &sender).await {
         Ok(reply) => reply,
         Err(err) => {
             let message = describe(&err);
@@ -213,12 +213,42 @@ fn describe(err: &JsValue) -> String {
     json::get_string(err, "message").unwrap_or_else(|| format!("{err:?}"))
 }
 
-async fn handle(message: &JsValue) -> Result<JsValue, JsValue> {
+async fn handle(message: &JsValue, sender: &JsValue) -> Result<JsValue, JsValue> {
     match json::get_string(message, "type").as_deref() {
         Some(messages::COMMENTS) => comments(message).await,
+        Some(messages::ENABLE_NOW) => enable_now(sender).await,
         // Not for this extension. Return undefined and leave it to another listener.
         _ => Ok(JsValue::UNDEFINED),
     }
+}
+
+/// Put the CSS of the enabled features into the tab that asked.
+///
+/// The master switch went on while that page was open. A registration only reaches the
+/// next load, and the page has no CSS at all, because the worker removes every
+/// registration while the extension is off.
+async fn enable_now(sender: &JsValue) -> Result<JsValue, JsValue> {
+    let Some(tab_id) = json::path(sender, &["tab", "id"]).and_then(|id| id.as_f64()) else {
+        return Err(JsValue::from_str("送信元のタブが分かりません"));
+    };
+    if !settings::is_extension_enabled().await {
+        return Err(JsValue::from_str("全体が無効です"));
+    }
+
+    let enabled = settings::load().await?;
+    let mut files = vec![settings::ENABLED_CSS];
+    for (feature, is_on) in FEATURES.iter().zip(&enabled) {
+        if *is_on {
+            files.extend_from_slice(feature.css);
+        }
+    }
+    chrome::insert_css(tab_id, &files).await?;
+    log(&format!(
+        "開いているタブに CSS を入れた: {} 本",
+        files.len()
+    ));
+
+    json::object(&[("ok", JsValue::TRUE)]).map(Into::into)
 }
 
 /// Select a video from the work title and the episode, and return the comments.

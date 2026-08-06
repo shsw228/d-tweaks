@@ -67,9 +67,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
  * The reply is asynchronous, so return true to keep the channel open. A throw here would
  * leave the sender without a reply, so every path calls sendResponse.
  */
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   ready
-    .then(() => on_message(message))
+    .then(() => on_message(message, sender))
     .then(sendResponse)
     .catch((error) => sendResponse({ ok: false, error: String(error) }));
   return true;
