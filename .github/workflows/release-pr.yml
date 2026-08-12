@@ -87,8 +87,11 @@ jobs:
 
           # printf and not a multi-line string: a line of `---` at column 0 would end the
           # YAML document.
+          # Two empty lines and not one: `$( )` removes the newlines at the end of the
+          # changelog, so with one line the note stays inside the last item of the list.
           notes=$(git cliff --tag "${VERSION}" --unreleased --strip all)
           note=$(printf '%s\n' \
+            "" \
             "" \
             "差分は manifest・Cargo・CHANGELOG の 4 ファイルだけです。" \
             "この PR の build が \"awaiting approval\" のままでも問題ありません" \
