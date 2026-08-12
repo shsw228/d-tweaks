@@ -540,6 +540,74 @@ html.dt-modal-open {
 }
 
 /*
+ * The row for a video that the user gives.
+ *
+ * The automatic selection shows nothing when it is not certain, so this is the way to
+ * get the comments of an episode that the search does not find.
+ */
+html:not(.dt-off) .dt-pin {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dt-pin__input {
+  /* The field must be able to become smaller than its content, else the buttons go out */
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.dt-pin__input::placeholder {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.dt-pin__input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.42);
+}
+
+/* The same look as the steps of the comment position */
+.dt-pin__button {
+  flex: none;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.dt-pin__button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/*
+ * Only for an episode that has a video from the user. The row is a flex box, so the
+ * `display` of this rule must win against `hidden`.
+ */
+.dt-pin__reset[hidden] {
+  display: none;
+}
+
+/*
  * The comment list. It scrolls with the play position, and only it grows to fill the
  * height of the side column.
  */

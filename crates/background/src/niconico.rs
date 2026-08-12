@@ -15,6 +15,10 @@
 //! Step 2 gives `server`, `threadKey` and `params` together, so
 //! `nvapi.nicovideo.jp/v1/comment/keys/thread` is not necessary.
 //!
+//! Step 2 also gives the title and the length of the video. A video that the user gave by
+//! its address has no entry in the search, so step 1 does not run for it and this is the
+//! only source of its name and its length.
+//!
 //! The necessary headers are `x-frontend-id: 6`, `x-frontend-version: 0` and
 //! `x-client-os-type: others`.
 
@@ -134,8 +138,24 @@ pub async fn search(query: &str) -> Result<Vec<Candidate>, JsValue> {
     Ok(videos)
 }
 
-/// Get `nvComment` (server, threadKey, params) from `watch?responseType=json`.
-async fn nv_comment(video_id: &str) -> Result<(String, String, JsValue), JsValue> {
+/// What one video is: the name for the display and the length for the drawing.
+pub struct VideoMeta {
+    pub title: String,
+    pub seconds: Option<f64>,
+}
+
+/// The comments of a video, with what the same reply says about the video.
+pub struct Watch {
+    pub meta: VideoMeta,
+    pub comments: Vec<Comment>,
+}
+
+/// Get `nvComment` (server, threadKey, params) and the video itself from
+/// `watch?responseType=json`.
+///
+/// The title and the length come from the same reply. A video that the user gave has no
+/// entry in the search, so this is the only source for its name and its length.
+async fn watch_data(video_id: &str) -> Result<(VideoMeta, String, String, JsValue), JsValue> {
     let url = format!("{WATCH_ENDPOINT}{video_id}?responseType=json");
     let json = fetch_json(request(&url, "GET", None)?).await?;
 
@@ -151,12 +171,26 @@ async fn nv_comment(video_id: &str) -> Result<(String, String, JsValue), JsValue
         .ok_or_else(|| JsValue::from_str("nvComment.threadKey なし"))?;
     let params =
         json::get(&nv, "params").ok_or_else(|| JsValue::from_str("nvComment.params なし"))?;
-    Ok((server, thread_key, params))
+
+    // The video itself. It is not necessary for the comments, so an absent field is not
+    // a failure: the caller can also have the title from the search.
+    let video = json::path(&json, &["data", "response", "video"]);
+    let meta = VideoMeta {
+        title: video
+            .as_ref()
+            .and_then(|v| json::get_string(v, "title"))
+            .unwrap_or_default(),
+        seconds: video
+            .as_ref()
+            .and_then(|v| json::get_f64(v, "duration"))
+            .filter(|seconds| *seconds > 0.0),
+    };
+    Ok((meta, server, thread_key, params))
 }
 
-/// Get the comments of all threads of a video.
-pub async fn comments(video_id: &str) -> Result<Vec<Comment>, JsValue> {
-    let (server, thread_key, params) = nv_comment(video_id).await?;
+/// Get the comments of all threads of a video, and what the video is.
+pub async fn watch(video_id: &str) -> Result<Watch, JsValue> {
+    let (meta, server, thread_key, params) = watch_data(video_id).await?;
 
     let body = json::object(&[
         ("threadKey", JsValue::from_str(&thread_key)),
@@ -171,7 +205,10 @@ pub async fn comments(video_id: &str) -> Result<Vec<Comment>, JsValue> {
     let json = fetch_json(request(&url, "POST", Some(&body))?).await?;
 
     let Some(threads) = json::path(&json, &["data", "threads"]).map(|v| Array::from(&v)) else {
-        return Ok(Vec::new());
+        return Ok(Watch {
+            meta,
+            comments: Vec::new(),
+        });
     };
 
     let mut all = Vec::new();
@@ -196,7 +233,10 @@ pub async fn comments(video_id: &str) -> Result<Vec<Comment>, JsValue> {
     }
     // Sort by time; the threads arrive in another order
     all.sort_by(|a, b| a.vpos_ms.total_cmp(&b.vpos_ms));
-    Ok(all)
+    Ok(Watch {
+        meta,
+        comments: all,
+    })
 }
 
 /// The comments as a JS array, the form that the content script receives.

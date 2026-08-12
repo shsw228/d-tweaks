@@ -27,6 +27,11 @@ filter on the channel makes the result much smaller. This is not tested.
 **Effect if not corrected:** no comments for some works. The code shows no wrong
 comments, because the match is strict.
 
+**Way out for the user:** the side column of the float player has a field for the
+address of a video. The comments of that video then come, and the choice stays for that
+episode (read "The user can give the video" in the notes). This does not correct the
+search; it removes the need for it in one episode.
+
 ## 2. The index of the comment cache is only safe in one service worker
 
 **Where:** `crates/background/src/cache.rs`

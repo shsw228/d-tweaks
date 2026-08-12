@@ -4,8 +4,12 @@
 //!
 //! | Layer | Key | Content | Time |
 //! |---|---|---|---|
+//! | Choice of the user | `dt:pin:<partId>` | The videoId that the user gave | For ever |
 //! | Map | `dt:vid:<partId>` | The videoId and the title, or `null` | 30 days, or one day for "not found" |
 //! | Comments | `dt:cmt:<videoId>` | The comments | 6 hours |
+//!
+//! The choice of the user comes before the map. It is not a result of the match, so no
+//! version of the match and no age removes it (`cache_keys::PIN_PREFIX`).
 //!
 //! The times differ. The search and the selection (`matching`) are the least certain
 //! step, and 100 items with a title comparison for every open of the same episode is
@@ -43,7 +47,9 @@ use wasm_bindgen::JsValue;
 
 use d_tweaks_shared::{chrome, json};
 
-use d_tweaks_shared::cache_keys::{COMMENT_INDEX as INDEX_KEY, COMMENT_PREFIX, VIDEO_PREFIX};
+use d_tweaks_shared::cache_keys::{
+    COMMENT_INDEX as INDEX_KEY, COMMENT_PREFIX, PIN_PREFIX, VIDEO_PREFIX,
+};
 
 const DAY_MS: f64 = 24.0 * 60.0 * 60.0 * 1000.0;
 /// The map from an episode to a video does not change, so this is long.
@@ -195,6 +201,51 @@ pub async fn put_video_id(key: &str, picked: Option<&VideoRef>) -> Result<(), Js
         ("at", JsValue::from_f64(Date::now())),
     ])?;
     write(&format!("{VIDEO_PREFIX}{key}"), &entry.into()).await
+}
+
+fn pin_key(key: &str) -> String {
+    format!("{PIN_PREFIX}{key}")
+}
+
+/// The video that the user gave for this episode, or `None`.
+///
+/// This entry has no age. The user selected it because the search cannot find the
+/// video, and that does not become false with the time. Only the button of the float
+/// player removes it (`remove_pin`).
+pub async fn pinned_video(key: &str) -> Option<VideoRef> {
+    let entry = read(&pin_key(key)).await?;
+    Some(VideoRef {
+        id: json::get_string(&entry, "videoId")?,
+        title: json::get_string(&entry, "videoTitle").unwrap_or_default(),
+        seconds: json::get_f64(&entry, "videoSeconds"),
+    })
+}
+
+/// Keep the video that the user gave.
+///
+/// The title and the length are kept with it, so a later open needs no request to
+/// nicovideo when the comments are still in the cache.
+pub async fn put_pin(key: &str, video: &VideoRef) -> Result<(), JsValue> {
+    let entry = json::object(&[
+        ("videoId", JsValue::from_str(&video.id)),
+        ("videoTitle", JsValue::from_str(&video.title)),
+        (
+            "videoSeconds",
+            video
+                .seconds
+                .map(JsValue::from_f64)
+                .unwrap_or(JsValue::NULL),
+        ),
+        ("at", JsValue::from_f64(Date::now())),
+    ])?;
+    write(&pin_key(key), &entry.into()).await
+}
+
+/// Forget the video that the user gave, so the search runs again.
+pub async fn remove_pin(key: &str) -> Result<(), JsValue> {
+    let keys = Array::new();
+    keys.push(&JsValue::from_str(&pin_key(key)));
+    chrome::local_remove(&keys).await
 }
 
 /// The comments from the cache. `None` if they are too old.

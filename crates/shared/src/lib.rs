@@ -5,4 +5,5 @@ pub mod cache_keys;
 pub mod chrome;
 pub mod json;
 pub mod messages;
+pub mod nicovideo;
 pub mod settings;

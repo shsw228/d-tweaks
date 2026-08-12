@@ -31,6 +31,13 @@ pub struct CommentQuery<'a> {
     pub episode_title: Option<&'a str>,
     /// The length. It decides when the episode number cannot.
     pub duration_seconds: Option<f64>,
+    /// A video that the user gave by its address.
+    ///
+    /// The search is then not used, and the service worker keeps this video for the
+    /// episode (`cache_keys::PIN_PREFIX`).
+    pub pin_video_id: Option<&'a str>,
+    /// Forget the video that the user gave, and search again.
+    pub unpin: bool,
 }
 
 impl CommentQuery<'_> {
@@ -57,6 +64,13 @@ impl CommentQuery<'_> {
                     .map(JsValue::from_f64)
                     .unwrap_or(JsValue::NULL),
             ),
+            (
+                "pinVideoId",
+                self.pin_video_id
+                    .map(JsValue::from_str)
+                    .unwrap_or(JsValue::NULL),
+            ),
+            ("unpin", JsValue::from_bool(self.unpin)),
         ])?;
         Ok(obj.into())
     }
@@ -76,6 +90,11 @@ pub enum CommentReply {
         comments: Array,
         /// Did it come from the cache? For the log.
         cached: bool,
+        /// Did the video come from the user and not from the search?
+        ///
+        /// The float player shows the button that goes back to the automatic selection
+        /// only for a video that the user gave.
+        pinned: bool,
     },
     /// The search ran and found no official video. A second try gives the same.
     NotFound,
@@ -89,6 +108,7 @@ pub fn reply_ok(
     video_seconds: Option<f64>,
     comments: &Array,
     cached: bool,
+    pinned: bool,
 ) -> Result<JsValue, JsValue> {
     Ok(json::object(&[
         ("ok", JsValue::TRUE),
@@ -102,6 +122,7 @@ pub fn reply_ok(
         ),
         ("comments", comments.clone().into()),
         ("cached", JsValue::from_bool(cached)),
+        ("pinned", JsValue::from_bool(pinned)),
     ])?
     .into())
 }
@@ -130,6 +151,9 @@ pub fn parse_reply(value: &JsValue) -> CommentReply {
             video_seconds: json::get_f64(value, "videoSeconds"),
             comments: json::get_array(value, "comments").unwrap_or_default(),
             cached: json::get(value, "cached")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            pinned: json::get(value, "pinned")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false),
         };
