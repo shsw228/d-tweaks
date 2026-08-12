@@ -22,8 +22,12 @@
 # `[kind]`, so the template needs no split.
 
 [changelog]
-header = "# Changelog\n\n"
+# The body of one version starts with an empty line and `trim` is off, so the last item
+# of a version and the heading of the version below it do not touch. Without that line,
+# a reader (and a renderer) sees the last item and the next heading as one block.
+header = "# Changelog"
 body = """
+
 {% if version %}## {{ version }} - {{ timestamp | date(format="%Y-%m-%d") }}{% else %}## Unreleased{% endif %}
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group }}
@@ -31,7 +35,7 @@ body = """
 - {{ commit.message | split(pat="\n") | first | trim }} ({{ commit.id | truncate(length=7, end="") }})
 {%- endfor %}
 {% endfor %}"""
-trim = true
+trim = false
 
 [git]
 conventional_commits = true
