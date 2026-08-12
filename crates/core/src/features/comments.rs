@@ -25,16 +25,27 @@
 //!
 //! The data attributes of `card_view` stay as the second source: without a signed-in
 //! account the REST request can fail, and the episode number alone can be enough.
+//!
+//! # The user can give the video
+//!
+//! The match is strict and shows nothing when it is not certain, and the search returns
+//! 100 items, so an episode can get no comments although the video exists. The side
+//! column therefore has a field for the address of a video (`build_pin_row`). The
+//! service worker then uses that video and keeps it for the episode, and the button next
+//! to the field goes back to the automatic selection.
 
 use std::cell::RefCell;
+use std::rc::Rc;
 
+use js_sys::Array;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
+use wasm_bindgen::prelude::Closure;
 use wasm_bindgen_futures::{JsFuture, spawn_local};
-use web_sys::{Document, Element, HtmlIFrameElement, Response};
+use web_sys::{Document, Element, HtmlIFrameElement, HtmlInputElement, KeyboardEvent, Response};
 
 use d_tweaks_shared::messages::{CommentQuery, CommentReply, parse_reply};
-use d_tweaks_shared::{chrome, json, settings};
+use d_tweaks_shared::{chrome, json, nicovideo, settings};
 
 use crate::dom::attr;
 use crate::features::{danmaku, frame};
@@ -168,6 +179,52 @@ pub(crate) fn episode_label(raw: Option<String>) -> Option<String> {
     }
 }
 
+/// What one load asks for.
+enum Request {
+    /// The normal path: the service worker searches, or uses a video that the user gave
+    /// before.
+    Auto,
+    /// Use this video for the episode and keep it.
+    Pin(String),
+    /// Forget the video that the user gave, and search again.
+    Unpin,
+}
+
+/// The state of the side column, in one structure.
+///
+/// The watch loop and the buttons of the input row both start a load, so the episode on
+/// the screen, the running generation and the drawing cannot be separate cells: a load
+/// that finishes late would then stop the drawing of a newer one.
+struct Session {
+    /// The partId that is on the screen. Empty before the first load.
+    part_id: String,
+    /// Increases with every load. A load that finishes after a newer one is discarded.
+    generation: u32,
+    handle: Option<danmaku::Handle>,
+}
+
+/// The row where the user gives the address of a video.
+#[derive(Clone)]
+struct PinRow {
+    input: HtmlInputElement,
+    /// Back to the automatic selection. Only visible for a video that the user gave.
+    reset: Element,
+}
+
+/// Everything that a load needs. Two places start one, so this is one structure.
+#[derive(Clone)]
+struct Ctx {
+    stage: Element,
+    side: Element,
+    frame: HtmlIFrameElement,
+    /// The line over the list. It shows the state of the request.
+    status: Element,
+    pin: PinRow,
+    /// What the card gave. The REST reply is better, but it can fail.
+    target: Rc<Target>,
+    state: Rc<RefCell<Session>>,
+}
+
 /// Add the comments to the float window.
 ///
 /// "Next episode" in the player navigates the iframe to another partId. There is no
@@ -198,14 +255,37 @@ pub fn attach(
             return;
         }
 
-        // Start with the partId of the card, then follow the URL of the iframe
-        let mut current = String::new();
-        let mut session: Option<danmaku::Handle> = None;
+        // The row comes after the test: with the feature off there is nothing to give
+        let (pin, load_button) = match build_pin_row(&document, &side) {
+            Ok(row) => row,
+            Err(err) => {
+                log(&format!("動画指定の行を作れませんでした: {err:?}"));
+                status.set_text_content(Some("コメント: 準備に失敗しました"));
+                return;
+            }
+        };
+
+        let ctx = Ctx {
+            stage,
+            side,
+            frame,
+            status,
+            pin,
+            target: Rc::new(target),
+            state: Rc::new(RefCell::new(Session {
+                part_id: String::new(),
+                generation: 0,
+                handle: None,
+            })),
+        };
+        if let Err(err) = install_pin_handlers(&ctx, &load_button) {
+            log(&format!("動画指定の操作を付けられませんでした: {err:?}"));
+        }
 
         loop {
             // The modal is closed
-            if !side.is_connected() {
-                if let Some(handle) = &session {
+            if !ctx.side.is_connected() {
+                if let Some(handle) = ctx.state.borrow_mut().handle.take() {
                     handle.dispose();
                 }
                 return;
@@ -213,18 +293,10 @@ pub fn attach(
 
             // While the URL of the iframe is not readable (it loads, or a CSP block),
             // use the partId of the card
-            let part_id = frame::part_id(&frame).unwrap_or_else(|| target.part_id.clone());
-            if !part_id.is_empty() && part_id != current {
-                current = part_id.clone();
-                // Discard the episode before; the danmaku stops with its canvas
-                if let Some(handle) = session.take() {
-                    handle.dispose();
-                }
-                status.set_text_content(Some("コメントを検索中…"));
-
-                let (text, handle) = load(&stage, &side, &frame, &part_id, &target).await;
-                status.set_text_content(Some(&text));
-                session = handle;
+            let part_id = frame::part_id(&ctx.frame).unwrap_or_else(|| ctx.target.part_id.clone());
+            let changed = !part_id.is_empty() && part_id != ctx.state.borrow().part_id;
+            if changed {
+                run(&ctx, part_id, Request::Auto).await;
             }
 
             sleep(WATCH_INTERVAL_MS).await;
@@ -234,14 +306,170 @@ pub fn attach(
     Ok(())
 }
 
-/// Get the comments of one episode and start the drawing. Returns (status text, handle).
+/// The episode that is on the screen: the state, else the iframe, else the card.
+fn current_part_id(ctx: &Ctx) -> String {
+    let known = ctx.state.borrow().part_id.clone();
+    if !known.is_empty() {
+        return known;
+    }
+    frame::part_id(&ctx.frame).unwrap_or_else(|| ctx.target.part_id.clone())
+}
+
+/// Build the row where the user gives the address of a video.
+///
+/// The automatic selection accepts a candidate only when it is certain (`matching::pick`
+/// in the service worker), and the search returns 100 items, so an episode can find
+/// nothing although the video exists. This row is the way out of that: paste the address
+/// of the video and its comments arrive.
+///
+/// Not a `<form>`: a submit inside the page of the site navigates.
+fn build_pin_row(document: &Document, side: &Element) -> Result<(PinRow, Element), JsValue> {
+    let root = document.create_element("div")?;
+    root.set_class_name("dt-pin");
+
+    let input: HtmlInputElement = document.create_element("input")?.dyn_into()?;
+    input.set_class_name("dt-pin__input");
+    input.set_type("text");
+    input.set_placeholder("動画の URL");
+    input.set_autocomplete("off");
+    input.set_spellcheck(false);
+    input.set_title("この話に使うニコニコ動画を指定します");
+    root.append_child(&input)?;
+
+    let load = document.create_element("button")?;
+    load.set_class_name("dt-pin__button");
+    load.set_attribute("type", "button")?;
+    load.set_text_content(Some("読込"));
+    root.append_child(&load)?;
+
+    // Only for an episode that has a video from the user
+    let reset = document.create_element("button")?;
+    reset.set_class_name("dt-pin__button dt-pin__reset");
+    reset.set_attribute("type", "button")?;
+    reset.set_attribute("title", "指定をやめて自動で探し直す")?;
+    reset.set_attribute("hidden", "")?;
+    reset.set_text_content(Some("自動"));
+    root.append_child(&reset)?;
+
+    side.append_child(&root)?;
+    Ok((PinRow { input, reset }, load))
+}
+
+fn install_pin_handlers(ctx: &Ctx, load_button: &Element) -> Result<(), JsValue> {
+    {
+        let ctx = ctx.clone();
+        let on_click = Closure::<dyn FnMut()>::new(move || submit_pin(&ctx));
+        load_button.add_event_listener_with_callback("click", on_click.as_ref().unchecked_ref())?;
+        on_click.forget();
+    }
+
+    // Enter does the same as the button.
+    //
+    // Every other key stops here also. The float search of this extension opens with `/`
+    // and the player of the site takes keys, and none of them may see what is typed into
+    // this field. Escape goes through, so it still closes the float window.
+    {
+        let owned = ctx.clone();
+        let on_key = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
+            if event.key() == "Escape" {
+                return;
+            }
+            event.stop_propagation();
+            if event.key() == "Enter" {
+                event.prevent_default();
+                submit_pin(&owned);
+            }
+        });
+        ctx.pin
+            .input
+            .add_event_listener_with_callback("keydown", on_key.as_ref().unchecked_ref())?;
+        on_key.forget();
+    }
+
+    {
+        let owned = ctx.clone();
+        let on_click = Closure::<dyn FnMut()>::new(move || {
+            let ctx = owned.clone();
+            spawn_local(async move {
+                let part_id = current_part_id(&ctx);
+                run(&ctx, part_id, Request::Unpin).await;
+            });
+        });
+        ctx.pin
+            .reset
+            .add_event_listener_with_callback("click", on_click.as_ref().unchecked_ref())?;
+        on_click.forget();
+    }
+
+    Ok(())
+}
+
+/// Read the field and start a load with that video.
+fn submit_pin(ctx: &Ctx) {
+    let Some(video_id) = nicovideo::video_id_from(&ctx.pin.input.value()) else {
+        // `run` would write over this text, so it does not run
+        ctx.status.set_text_content(Some(
+            "動画の URL を読み取れません（例: https://www.nicovideo.jp/watch/so46649112）",
+        ));
+        return;
+    };
+    let ctx = ctx.clone();
+    spawn_local(async move {
+        let part_id = current_part_id(&ctx);
+        run(&ctx, part_id, Request::Pin(video_id)).await;
+    });
+}
+
+/// Start one load and put its result on the screen.
+///
+/// The result of a load that is not the newest one is discarded: the user can give an
+/// address while the search of the episode before still runs, and two drawings on one
+/// canvas is not recoverable.
+async fn run(ctx: &Ctx, part_id: String, request: Request) {
+    let generation = {
+        let mut state = ctx.state.borrow_mut();
+        state.generation = state.generation.wrapping_add(1);
+        state.part_id = part_id.clone();
+        // Discard the episode before; the danmaku stops with its canvas
+        if let Some(handle) = state.handle.take() {
+            handle.dispose();
+        }
+        state.generation
+    };
+    ctx.status.set_text_content(Some(match &request {
+        Request::Pin(_) => "指定された動画を読み込み中…",
+        _ => "コメントを検索中…",
+    }));
+
+    let (text, handle, pinned) = load(ctx, &part_id, &request).await;
+
+    // A newer load started while this one waited
+    if ctx.state.borrow().generation != generation {
+        if let Some(handle) = handle {
+            handle.dispose();
+        }
+        return;
+    }
+
+    ctx.status.set_text_content(Some(&text));
+    let _ = if pinned {
+        ctx.pin.input.set_value("");
+        ctx.pin.reset.remove_attribute("hidden")
+    } else {
+        ctx.pin.reset.set_attribute("hidden", "")
+    };
+    ctx.state.borrow_mut().handle = handle;
+}
+
+/// Get the comments of one episode and start the drawing.
+///
+/// Returns (status text, handle, is the video one that the user gave).
 async fn load(
-    stage: &Element,
-    side: &Element,
-    frame: &HtmlIFrameElement,
+    ctx: &Ctx,
     part_id: &str,
-    target: &Target,
-) -> (String, Option<danmaku::Handle>) {
+    request: &Request,
+) -> (String, Option<danmaku::Handle>, bool) {
+    let (stage, side, frame, target) = (&ctx.stage, &ctx.side, &ctx.frame, ctx.target.as_ref());
     // The REST reply wins. Without it, use what the DOM gave.
     let info = part_info(part_id).await;
     let (work_title, episode_label, episode_title, duration) = match info {
@@ -261,27 +489,39 @@ async fn load(
 
     let Some(work_title) = work_title else {
         log("コメント: 作品名が取れないので引きません");
-        return ("コメント: 作品名が取れませんでした".to_string(), None);
+        return (
+            "コメント: 作品名が取れませんでした".to_string(),
+            None,
+            false,
+        );
     };
 
+    let (pin_video_id, unpin) = match request {
+        Request::Pin(video_id) => (Some(video_id.as_str()), false),
+        Request::Unpin => (None, true),
+        Request::Auto => (None, false),
+    };
     let query = CommentQuery {
         part_id,
         work_title: &work_title,
         episode_label: episode_label.as_deref(),
         episode_title: episode_title.as_deref(),
         duration_seconds: duration,
+        pin_video_id,
+        unpin,
     };
     let message = match query.to_js() {
         Ok(message) => message,
         Err(err) => {
             log(&format!("コメント依頼の組み立てに失敗: {err:?}"));
-            return ("コメントを取得できませんでした".to_string(), None);
+            return ("コメントを取得できませんでした".to_string(), None, false);
         }
     };
     log(&format!(
-        "コメントを依頼: {work_title} / {} / {}",
+        "コメントを依頼: {work_title} / {} / {} / {}",
         episode_label.as_deref().unwrap_or("話数なし"),
-        duration.map_or("尺なし".to_string(), |s| format!("{s}秒"))
+        duration.map_or("尺なし".to_string(), |s| format!("{s}秒")),
+        pin_video_id.unwrap_or(if unpin { "指定を解除" } else { "自動" })
     ));
 
     match chrome::send_message(&message).await {
@@ -292,11 +532,13 @@ async fn load(
                 video_seconds,
                 comments,
                 cached,
+                pinned,
             } => {
                 let source = if cached { "キャッシュ" } else { "取得" };
+                let how = if pinned { "指定" } else { "自動" };
                 let count = comments.length();
                 log(&format!(
-                    "コメント: {count} 件 / {video_id} {video_title} / {source}"
+                    "コメント: {count} 件 / {video_id} {video_title} / {source} / {how}"
                 ));
                 let options = danmaku::Options {
                     video_id: &video_id,
@@ -314,21 +556,30 @@ async fn load(
                     }
                 };
                 let label = episode_label.as_deref().unwrap_or("");
+                // The address that the user gave is shown, so a wrong one is visible
+                let mark = if pinned { "／指定" } else { "" };
                 (
-                    format!("{work_title} {label}／コメント {count} 件（{video_id}）"),
+                    format!("{work_title} {label}／コメント {count} 件（{video_id}{mark}）"),
                     handle,
+                    pinned,
                 )
             }
             CommentReply::NotFound => {
                 log("コメント: ニコニコに該当する公式動画がありません");
                 (
-                    "ニコニコに該当する公式配信が見つかりません".to_string(),
-                    None,
+                    "ニコニコに該当する公式配信が見つかりません。動画の URL を入れると、その動画のコメントを出します。"
+                        .to_string(),
+                    without_comments(ctx).await,
+                    false,
                 )
             }
             CommentReply::Error(message) => {
                 log(&format!("コメント取得に失敗: {message}"));
-                (format!("コメントを取得できません: {message}"), None)
+                (
+                    format!("コメントを取得できません: {message}"),
+                    without_comments(ctx).await,
+                    false,
+                )
             }
         },
         // The service worker is not there, or it sent no reply
@@ -336,8 +587,37 @@ async fn load(
             log(&format!("コメント依頼を送れませんでした: {err:?}"));
             (
                 "コメントを取得できません（拡張の再読み込みが必要かもしれません）".to_string(),
-                None,
+                without_comments(ctx).await,
+                false,
             )
+        }
+    }
+}
+
+/// Start the side column for an episode that has no comments.
+///
+/// The debug view shows what the player does (the frame rate, the prefetch, the size of
+/// the picture). That belongs to the video and not to the comments, so a failure of the
+/// search must not remove it: there is no other place with those values.
+///
+/// Only the debug view needs this. Without it there is nothing to draw, so nothing runs.
+async fn without_comments(ctx: &Ctx) -> Option<danmaku::Handle> {
+    if !settings::is_enabled("debug-view").await {
+        return None;
+    }
+    let options = danmaku::Options {
+        video_id: "",
+        video_title: "コメントなし",
+        video_seconds: None,
+        draw_fps: settings::danmaku_fps().await,
+        duration: settings::danmaku_duration().await,
+        debug: true,
+    };
+    match danmaku::start(&ctx.stage, &ctx.side, &ctx.frame, &Array::new(), options) {
+        Ok(handle) => Some(handle),
+        Err(err) => {
+            log(&format!("動画情報の表示を開始できませんでした: {err:?}"));
+            None
         }
     }
 }

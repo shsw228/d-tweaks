@@ -1143,6 +1143,10 @@ impl Handle {
 ///
 /// `stage` is over the video (for the canvas). `side` is the right column (list
 /// and debug view).
+///
+/// An empty `comments` is a normal call: nicovideo has no video for this episode, and
+/// the debug view must still show what the player does. The drawing then draws nothing
+/// and the control for the position of the comments is not built.
 pub fn start(
     stage: &Element,
     side: &Element,
@@ -1176,8 +1180,16 @@ pub fn start(
 
     // Side column from the top: offset controls, list, debug view. Only the list
     // grows to fill the height.
+    //
+    // Without comments only the debug view is built. That view belongs to the video, so
+    // it must also appear when nicovideo gives nothing, and a control for the position of
+    // comments that do not exist would say that something is there.
     let offset = Rc::new(Cell::new(0.0));
-    let offset_row = build_offset(&document, side, options.video_id, &offset)?;
+    let offset_row = if raw.is_empty() {
+        None
+    } else {
+        Some(build_offset(&document, side, options.video_id, &offset)?)
+    };
     let list = CommentList::new(&document, side, &raw)?;
     let debug = if options.debug {
         Some(DebugView::new(&document, side)?)
@@ -1185,7 +1197,8 @@ pub fn start(
         None
     };
 
-    let mut elements = vec![Element::from(canvas.clone()), offset_row, list.root.clone()];
+    let mut elements = vec![Element::from(canvas.clone()), list.root.clone()];
+    elements.extend(offset_row);
     if let Some(debug) = &debug {
         elements.push(debug.root.clone());
     }

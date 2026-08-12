@@ -23,7 +23,7 @@ The UI of the extension is in Japanese, because the service is.
 | Work page | The head becomes a full-width hero, the episodes become a grid of every episode, and the summary, the cast and the staff become tables |
 | Search | The search link of the header opens a float search that does not leave the page. Results arrive while you type. Cmd-K, Ctrl-K and `/` also open it |
 | Playback | An episode plays in a float window over the list. The control bar and the head bar are outside of the video, and the chapters give a "skip to the main story" button |
-| Comments | The comments of the same episode come from the official channel on nicovideo and are drawn over the video and in a list |
+| Comments | The comments of the same episode come from the official channel on nicovideo and are drawn over the video and in a list. When the match finds nothing, a field takes the address of a video and uses that one |
 
 Every feature has its own switch, and one more switch stops everything without a change
 in `chrome://extensions`. With a feature off, the site looks as it always does.
@@ -158,7 +158,9 @@ such as `-rc.1` is not valid. The store never accepts the same version twice.
 - Comments exist only for the works and the episodes that are on the official channel.
   The match uses the work title, the season, the episode number and the length, and it
   **shows nothing when it is not certain**, so that the comments of another episode never
-  appear.
+  appear. For an episode that the search does not find, put the address of the video into
+  the field in the comment column; that choice stays for the episode, and the button next
+  to the field goes back to the automatic selection.
 - Playback on the same page needs `'self'` in the `frame-src` of the site, which this
   extension adds. That change is active **only while the float player is on** and goes
   away with the feature or with the master switch (`extension/rules.json`).

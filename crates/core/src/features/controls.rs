@@ -18,6 +18,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use web_sys::{
     Document, Element, HtmlElement, HtmlIFrameElement, HtmlInputElement, HtmlMediaElement,
+    KeyboardEvent, KeyboardEventInit,
 };
 
 use crate::features::{frame, player_modal};
@@ -132,6 +133,45 @@ fn apply_native_hidden(iframe: &HtmlIFrameElement, hidden: bool) {
     };
     // Only the rule changes; the element stays
     style.set_text_content(Some(if hidden { HIDE_RULE } else { "" }));
+}
+
+/// Key of "the episode before" in the player of the site.
+///
+/// The handler of the site reads `keyCode`, and it has `case 80` (P) and `case 33`
+/// (PageUp) for this action.
+const PREV_KEY_CODE: u32 = 80;
+
+/// Go to the episode before.
+///
+/// A `click()` on `.prevButton` of the site does nothing. That button is not one action:
+/// `prevBtnClickTouchEvent` reads the classes of `#prevPopupIn` and `#prevPopupInReTop`
+/// and calls `goPrev()` for the first and `jump(0)` ("back to the start") for the second.
+/// The site writes those classes on `mouseenter` (`prevPlay3SecJudge`), and a `click()`
+/// sends no `mouseenter`, so neither of the two agrees and nothing happens.
+///
+/// The same function also means "back to the start" after the first three seconds of the
+/// episode, which is not what this button says.
+///
+/// The player has the same action on a key, and that path calls `goPrev()` without a
+/// state of a popup in it. The handler is on the document of the iframe, so the event
+/// goes there. `.nextButton` needs none of this: its click handler calls `goNext()`
+/// directly, and it also saves the play position first.
+fn go_prev(iframe: &HtmlIFrameElement) {
+    let Some(doc) = iframe.content_document() else {
+        return;
+    };
+    let init = KeyboardEventInit::new();
+    init.set_key("p");
+    init.set_key_code(PREV_KEY_CODE);
+    init.set_which(PREV_KEY_CODE);
+    init.set_bubbles(true);
+    init.set_cancelable(true);
+    match KeyboardEvent::new_with_keyboard_event_init_dict("keydown", &init) {
+        Ok(event) => {
+            let _ = doc.dispatch_event(&event);
+        }
+        Err(err) => log(&format!("前話のキー操作を作れませんでした: {err:?}")),
+    }
 }
 
 /// Click a button of the site.
@@ -257,10 +297,17 @@ pub fn install(panel: &Element, bar: &Element, iframe: &HtmlIFrameElement) -> Re
         on_click(element, move || seek_by(&video, delta))?;
     }
 
-    // The episode buttons need the logic of the site (continuous play)
-    for (element, selector) in [(&prev, ".prevButton"), (&next, ".nextButton")] {
+    // The episode buttons need the logic of the site (continuous play).
+    //
+    // The two are not symmetric: the next button of the site is one action, the previous
+    // button of the site is two (see `go_prev`).
+    {
         let iframe = iframe.clone();
-        on_click(element, move || click_native(&iframe, selector))?;
+        on_click(&prev, move || go_prev(&iframe))?;
+    }
+    {
+        let iframe = iframe.clone();
+        on_click(&next, move || click_native(&iframe, ".nextButton"))?;
     }
 
     // The quality setting is only in the panel of the site, so it can appear

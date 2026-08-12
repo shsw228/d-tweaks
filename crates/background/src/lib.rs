@@ -252,12 +252,19 @@ async fn enable_now(sender: &JsValue) -> Result<JsValue, JsValue> {
 }
 
 /// Select a video from the work title and the episode, and return the comments.
+///
+/// A video that the user gave (`pinVideoId`) comes before the search, and a video that
+/// the user gave before comes before it also (`cache::pinned_video`).
 async fn comments(message: &JsValue) -> Result<JsValue, JsValue> {
     let part_id = json::get_string(message, "partId").unwrap_or_default();
     let work_title = json::get_string(message, "workTitle").unwrap_or_default();
     let episode_label = json::get_string(message, "episodeLabel");
     let episode_title = json::get_string(message, "episodeTitle");
     let duration = json::get_f64(message, "durationSeconds");
+    let pin_video_id = json::get_string(message, "pinVideoId");
+    let unpin = json::get(message, "unpin")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
 
     if work_title.trim().is_empty() {
         return Err(JsValue::from_str("作品名がありません"));
@@ -269,21 +276,44 @@ async fn comments(message: &JsValue) -> Result<JsValue, JsValue> {
         part_id
     };
 
-    let video = match cache::video_id(&key).await {
-        Some(cache::VideoIdHit::Found(video)) => video,
-        Some(cache::VideoIdHit::Missing) => return messages::reply_not_found(),
-        None => match resolve(
-            &key,
-            &work_title,
-            episode_label.as_deref(),
-            episode_title.as_deref(),
-            duration,
-        )
-        .await?
-        {
-            Some(picked) => picked,
-            None => return messages::reply_not_found(),
-        },
+    if unpin {
+        if let Err(err) = cache::remove_pin(&key).await {
+            log(&format!("指定の解除に失敗: {}", describe(&err)));
+        } else {
+            log(&format!("{key}: 動画の指定を解除した"));
+        }
+    }
+
+    // A video that the user gives now. It replaces the search and stays for the episode.
+    if let Some(raw) = pin_video_id.filter(|id| !id.trim().is_empty()) {
+        return pinned_comments(&key, &raw).await;
+    }
+
+    let (video, pinned) = match cache::pinned_video(&key).await {
+        Some(video) => {
+            log(&format!("{key}: 指定された動画 {} を使う", video.id));
+            (video, true)
+        }
+        None => {
+            let found = match cache::video_id(&key).await {
+                Some(cache::VideoIdHit::Found(video)) => Some(video),
+                Some(cache::VideoIdHit::Missing) => return messages::reply_not_found(),
+                None => {
+                    resolve(
+                        &key,
+                        &work_title,
+                        episode_label.as_deref(),
+                        episode_title.as_deref(),
+                        duration,
+                    )
+                    .await?
+                }
+            };
+            match found {
+                Some(video) => (video, false),
+                None => return messages::reply_not_found(),
+            }
+        }
     };
     let (video_id, video_title, video_seconds) = (video.id, video.title, video.seconds);
 
@@ -292,17 +322,73 @@ async fn comments(message: &JsValue) -> Result<JsValue, JsValue> {
             "{video_id}: キャッシュから {} 件",
             cached.length()
         ));
-        return messages::reply_ok(&video_id, &video_title, video_seconds, &cached, true);
+        return messages::reply_ok(
+            &video_id,
+            &video_title,
+            video_seconds,
+            &cached,
+            true,
+            pinned,
+        );
     }
 
-    let list = niconico::comments(&video_id).await?;
-    let array = niconico::comments_to_js(&list)?;
+    let watch = niconico::watch(&video_id).await?;
+    let array = niconico::comments_to_js(&watch.comments)?;
     log(&format!("{video_id}: 取得 {} 件", array.length()));
     // The comments are usable without the cache, so only log a failure
     if let Err(err) = cache::put_comments(&video_id, &array).await {
         log(&format!("キャッシュ保存に失敗: {}", describe(&err)));
     }
-    messages::reply_ok(&video_id, &video_title, video_seconds, &array, false)
+    messages::reply_ok(
+        &video_id,
+        &video_title,
+        video_seconds,
+        &array,
+        false,
+        pinned,
+    )
+}
+
+/// Use the video that the user gave, and keep it for this episode.
+///
+/// The search is not used: the reason for this path is that the search does not give the
+/// video (`matching::pick` is strict, and a work without an episode number can be outside
+/// of the 100 items that the search returns).
+///
+/// The comment cache is also not used. "Load" is an action of the user, so it gets the
+/// comments that exist now.
+async fn pinned_comments(key: &str, raw: &str) -> Result<JsValue, JsValue> {
+    // The content script reads the address, but the value comes over a message, so test
+    // it again before it goes into a request
+    let Some(video_id) = d_tweaks_shared::nicovideo::video_id_from(raw) else {
+        return Err(JsValue::from_str(&format!(
+            "動画の URL として読めません: {raw}"
+        )));
+    };
+
+    // One request gives the title, the length and the comments
+    let watch = niconico::watch(&video_id).await?;
+    let array = niconico::comments_to_js(&watch.comments)?;
+    let video = cache::VideoRef {
+        id: video_id,
+        title: watch.meta.title,
+        seconds: watch.meta.seconds,
+    };
+    log(&format!(
+        "{key}: 指定された {} {} を {} 件で登録",
+        video.id,
+        video.title,
+        array.length()
+    ));
+
+    // Neither of the two is necessary for this reply, so only log a failure
+    if let Err(err) = cache::put_pin(key, &video).await {
+        log(&format!("動画の指定を保存できません: {}", describe(&err)));
+    }
+    if let Err(err) = cache::put_comments(&video.id, &array).await {
+        log(&format!("キャッシュ保存に失敗: {}", describe(&err)));
+    }
+    messages::reply_ok(&video.id, &video.title, video.seconds, &array, false, true)
 }
 
 /// Search, select one video, and keep the result in the map. Also keeps "not found".

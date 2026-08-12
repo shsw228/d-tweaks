@@ -21,6 +21,15 @@ pub const VIDEO_ROOT: &str = "dt:vid:";
 ///   day.
 pub const VIDEO_PREFIX: &str = "dt:vid:v2:";
 
+/// The video that the user gave for an episode, by its address.
+///
+/// It is not under `VIDEO_ROOT`. That root goes away with a new version of the match
+/// (`drop_stale_video_entries`), and the choice of a user is not a result of the match:
+/// the user gives an address when the search of nicovideo cannot find the video.
+///
+/// The entry has no age. Only the user removes it, with the button of the float player.
+pub const PIN_PREFIX: &str = "dt:pin:";
+
 /// The comments. The key is the video id, so a change of the match logic does not make
 /// them wrong.
 pub const COMMENT_PREFIX: &str = "dt:cmt:";

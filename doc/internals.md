@@ -193,6 +193,33 @@ Two details that cost a defect each:
 - Compare the length as a ratio, not as a difference in seconds. The upload of a
   channel can be some seconds longer, and a preview is much shorter.
 
+### The user can give the video
+
+The rules above make a "not found" normal: the search returns 100 items, `pick` accepts
+only a candidate that agrees in every point, and a work without an episode number can
+have more hits than the window. The comments are then absent although the video exists.
+
+So the side column has a field for the address of a video. The content script reads the
+id out of what the user pastes (`shared::nicovideo::video_id_from`, which takes a watch
+address, a `nico.ms` address or the id alone), and the service worker uses that video
+instead of the search.
+
+Three decisions in that path:
+
+- **The choice of the user is not in the map of the match.** It has its own key
+  (`dt:pin:<partId>`), because `drop_stale_video_entries` removes the map with every new
+  version of the match logic, and a choice of a user is not a result of that logic. It
+  also has no age.
+- **The choice comes before the map, and "Load" does not read the comment cache.** The
+  user presses that button to get the comments of that video now.
+- **The service worker reads the address again.** The content script already did it, but
+  the value arrives over a message and goes into a request, so both sides use the same
+  function.
+
+One request gives everything that this path needs: `watch?responseType=json` has the
+title and the length of the video next to `nvComment`. A video that the search does not
+give has no other source for its name and its length.
+
 ### Do not use a bare number as a text match
 
 An episode number can arrive as a bare `6`. The text `6` is also inside `第16話` and
@@ -294,6 +321,34 @@ modal dialog makes the other elements inert.
 | `close()` | The correct element |
 
 Use `close()`. The CSS only prevents the advertisement for the first moment.
+
+### The previous-episode button of the site is two actions
+
+`.nextButton` of the player has one click handler, and it calls `goNext()`. A `click()`
+on it from the outside works.
+
+`.prevButton` does not. Its handler (`prevBtnClickTouchEvent`) reads the classes of
+`#prevPopupIn` and `#prevPopupInReTop` and calls `goPrev()` for the first and `jump(0)`
+("back to the start") for the second. The site writes those classes on `mouseenter`
+(`prevPlay3SecJudge`), and a `click()` sends no `mouseenter`, so neither agrees and
+**nothing happens**. The same function also means "back to the start" after the first
+three seconds, which is not what a button named "前話" says.
+
+The player has the same action on a key (`case 80` = P, `case 33` = PageUp, both call
+`goPrev()`), and that path has no state of a popup in it. So `controls::go_prev`
+dispatches a `keydown` with that `keyCode` on the document of the iframe.
+
+### The comment column is not only comments
+
+The debug view (`debug-view`) shows the frame rate, the frame number, the prefetch and
+the size of the picture. Those belong to the video, but the code that draws them starts
+with the comments, so a "not found" of nicovideo also removed the only place with those
+values.
+
+`danmaku::start` now accepts an empty list of comments: the canvas and the debug view
+come, and the control for the position of the comments does not (a control for comments
+that do not exist says that something is there). `comments::without_comments` uses this
+path, and only when the debug view is on.
 
 ### The site loses the last position
 
