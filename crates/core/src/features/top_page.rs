@@ -58,7 +58,7 @@
 //! would be too expensive, so this page has no heart (the work page has one).
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use wasm_bindgen::JsCast;
@@ -66,8 +66,11 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{Document, Element, HtmlAnchorElement, HtmlElement, MouseEvent, Url};
 
+use d_tweaks_shared::settings;
+
 use crate::dom::{attr, element, text_of};
 use crate::features::card_view::{self, Badge, Card};
+use crate::features::rental;
 use crate::log;
 
 /// A section of the site.
@@ -202,6 +205,11 @@ fn parse_item(item: &Element) -> Option<(Card, Option<String>)> {
         .or_else(|| attr(item, "data-workid"));
     let part_id = params.as_ref().and_then(|p| p.get("partId"));
 
+    // A rental goes out here, so no section, no chip and no image of it is made
+    if work_id.as_deref().is_some_and(is_rental) {
+        return None;
+    }
+
     // An update time such as "12:00更新" becomes a badge
     let mut badges = Vec::new();
     if let Some(update) = text_of(item, ".c-infoDetails__onAirUpdate") {
@@ -281,6 +289,53 @@ fn role_of(title: &str) -> Role {
     } else {
         Role::Browse
     }
+}
+
+thread_local! {
+    /// The workIds of the rentals, when the setting is on and the answer arrived.
+    ///
+    /// `render` is not async (a timer calls it), so the answer cannot be awaited there.
+    /// `start_rental_load` fills this while the items of the site arrive, which takes at
+    /// least two ticks, so the answer of the cache is always in time. Without the answer
+    /// nothing is removed: a page with rentals is better than a page that waits.
+    static RENTAL_IDS: RefCell<Option<HashSet<String>>> = const { RefCell::new(None) };
+}
+
+/// Start reading the rental works. Does nothing when the setting is off.
+async fn start_rental_load() {
+    if !settings::switch_enabled(settings::TOP_NO_RENTAL).await {
+        return;
+    }
+    if let Some(ids) = rental::work_ids().await {
+        RENTAL_IDS.with_borrow_mut(|slot| *slot = Some(ids));
+    }
+}
+
+fn is_rental(work_id: &str) -> bool {
+    RENTAL_IDS.with_borrow(|slot| slot.as_ref().is_some_and(|ids| ids.contains(work_id)))
+}
+
+/// Is the rental filter on and ready? Then the section of the rentals is also hidden.
+fn rental_filter_ready() -> bool {
+    RENTAL_IDS.with_borrow(|slot| slot.is_some())
+}
+
+/// Does this section hold the rentals?
+///
+/// Every item of it is removed by `parse_item`, so it gives no cards and would stay on
+/// the screen as a slider of the site. The id of the `<section>` is `rental` (measured in
+/// the HTML of `tp_pc`); the title is the second test, in case that id changes.
+fn is_rental_section(section: &Element) -> bool {
+    let by_id = section
+        .closest("section[id]")
+        .ok()
+        .flatten()
+        .map(|el| el.id() == "rental")
+        .unwrap_or(false);
+    by_id
+        || text_of(section, ".p-title__text")
+            .map(|title| title.contains("レンタル"))
+            .unwrap_or(false)
 }
 
 /// Read a section. `None` without a slider or without a usable item.
@@ -858,6 +913,9 @@ pub fn render() -> Result<u32, JsValue> {
     let nodes = document.query_selector_all(SECTION_SELECTOR)?;
     let mut sections = Vec::new();
     let mut used: Vec<Element> = Vec::new();
+    // Where the own page goes. Not `used[0]`: the section of the rentals is also in that
+    // list and it gives no cards, so it must not decide the place.
+    let mut anchor: Option<Element> = None;
     for index in 0..nodes.length() {
         let Some(node) = nodes.item(index) else {
             continue;
@@ -866,9 +924,16 @@ pub fn render() -> Result<u32, JsValue> {
             continue;
         };
         let Some(parsed) = parse_section(&section) else {
+            // The rentals give no card, so hide that slider instead of leaving it
+            if rental_filter_ready() && is_rental_section(&section) {
+                used.push(section);
+            }
             continue;
         };
         sections.push(parsed);
+        if anchor.is_none() {
+            anchor = Some(section.clone());
+        }
         used.push(section);
     }
 
@@ -877,7 +942,9 @@ pub fn render() -> Result<u32, JsValue> {
         return Ok(0);
     }
 
-    let anchor = used[0].clone();
+    let Some(anchor) = anchor else {
+        return Ok(0);
+    };
     build(&document, sections, &anchor)?;
     for section in &used {
         section.class_list().add_1(RENDERED_CLASS)?;
@@ -895,6 +962,9 @@ pub fn render() -> Result<u32, JsValue> {
 /// (`.pageWrapper:not(:has(.dt-top))`). After four seconds without a result, the
 /// site is visible again (see `top-page.css`).
 pub async fn install() {
+    // Read the rentals while the site inserts its items (see `RENTAL_IDS`)
+    spawn_local(start_rental_load());
+
     let mut seen = (0usize, 0u32);
     let mut stable = 0;
     let mut waited = 0;

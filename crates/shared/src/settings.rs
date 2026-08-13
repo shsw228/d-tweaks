@@ -182,6 +182,8 @@ pub const SEARCH_NO_RENTAL: &str = "search-no-rental";
 pub const SEARCH_SHORTCUTS: &str = "search-shortcuts";
 /// Is the skip button of the float player on?
 pub const PLAYER_SKIP: &str = "player-skip";
+/// Remove the rentals from the own top page.
+pub const TOP_NO_RENTAL: &str = "top-no-rental";
 
 pub const SWITCHES: &[SwitchDef] = &[
     SwitchDef {
@@ -194,6 +196,12 @@ pub const SWITCHES: &[SwitchDef] = &[
         id: PLAYER_SKIP,
         label: "本編へのスキップボタンを出す",
         description: "配信データの章立てから、映像の右下に「本編へスキップ」を出します（判定はサイトのプレイヤーと同じ規則）。エンディングでは「次の話へ」になります。アバン（本編相当）は飛ばさず、自動スキップもしません。",
+        default: true,
+    },
+    SwitchDef {
+        id: TOP_NO_RENTAL,
+        label: "トップからレンタル販売の作品を除く",
+        description: "自前のトップページ（今日更新・ランキング・さがす）から、レンタル販売の作品を外します。レンタル作品の一覧（300 件）を 1 日 1 回だけ取り、作品 ID で突き合わせます。",
         default: true,
     },
     SwitchDef {
