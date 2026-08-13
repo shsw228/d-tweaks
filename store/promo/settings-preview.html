@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>d-tweaks の設定</title>
+    <!-- The look is shared with the popup (popup.html) -->
+    <link rel="stylesheet" href="../../extension/settings.css" />
+  </head>
+  <body>
+    <main>
+      <h1>d-tweaks</h1>
+      <p class="lead">
+        切り替えると即座に保存されます。すでに開いているタブには再読み込み後に反映されます。
+      </p>
+      <!--
+        Two panes: the groups on the left, the rows of the selected group on the right.
+        `crates/options` fills both from the settings tables, so this file has no names.
+        The popup has no `#nav`, and then the same code draws one column.
+      -->
+      <!-- The main switch is over both columns -->
+      <div id="master"></div>
+      <div class="layout">
+        <nav id="nav" aria-label="設定の種類"></nav>
+        <div class="pane">
+          <div id="settings"></div>
+          <p id="status"></p>
+        </div>
+      </div>
+    </main>
+    <!-- The CSP (script-src 'self') has no inline script, so this is a real file -->
+    <script>window.__DT_VERSION__="1.3.0";</script>
+    <script src="./mock-chrome.js"></script>
+    <script type="module" src="../../extension/settings-loader.js"></script>
+      <script>
+      // `?group=` opens that card, so the picture is not the group with one row
+      const want = new URLSearchParams(location.search).get("group");
+      if (want) {
+        const open = () => {
+          const hit = [...document.querySelectorAll("#nav .navItem")].find(
+            (b) => b.textContent.trim() === want,
+          );
+          if (hit) hit.click();
+          else setTimeout(open, 120);
+        };
+        setTimeout(open, 300);
+      }
+    </script>
+  </body>
+</html>

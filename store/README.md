@@ -20,6 +20,15 @@ base64, so the file works from `file://` in headless Chrome.
 The picture of a video can be black in a capture: Chrome blanks protected video while a
 screen recording runs (see `player_modal`). That is not a defect.
 
-Still missing: the settings page. `chrome-extension://` cannot be opened by the browser
-automation, so that one capture has to come from the browser by hand
-(`chrome-extension://<id>/options.html`).
+## The settings page
+
+`chrome-extension://` cannot be opened outside the browser, so that page is rendered from
+the **real UI**: `settings-preview.html` loads the same WASM and CSS as the extension, and
+`mock-chrome.js` answers the four `chrome` APIs that `crates/options` uses with the
+defaults of a new installation. The picture is the real page, not a drawing of it.
+
+It needs a local server (an ES module and a `.wasm` are loaded), which `build.sh` starts
+and stops. `?group=` opens one card, so the picture is not the group with a single row.
+
+`mock-chrome.js` and `settings-preview.html` are only for this build. They are not in the
+extension and not in the archive (`just package` copies `extension/` only).
