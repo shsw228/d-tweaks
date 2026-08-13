@@ -6,11 +6,15 @@ Everything that the listing needs, and how it is made.
 |---|---|
 | `screenshots/` | The captures of the real pages (`raw-*.jpg`), as they came out of the browser |
 | `promo/` | `promo.html` (one file for every image) and `build.sh` |
-| `assets/` | What goes to the store. Made by `build.sh`; do not edit by hand |
+| `assets/ja`, `assets/en` | What goes to the store, one set per language. Made by `build.sh`; do not edit by hand |
 
 ```sh
 store/promo/build.sh    # bakes assets/ with the Chrome of this machine
 ```
+
+The store keeps one listing per language (title, description, screenshots, promo images), so
+every image exists in both. The captures are the same in both: the site is Japanese. The
+words come from `FRAMES` and `BRAND` in `make.py`.
 
 The store accepts a screenshot of 1280x800 (or 640x400), a small tile of 440x280 and a
 marquee of 1400x560. `promo.html` draws one of them at a time (`?frame=`), so a change of

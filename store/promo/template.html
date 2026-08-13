@@ -23,26 +23,18 @@
   }
   .shot img { width: 100%; display: block; }
   /* The small tile and the marquee: name, one line, no screenshot */
-  .frame[data-frame="tile"], .frame[data-frame="marquee"] {
+  .frame[data-frame^="tile"], .frame[data-frame^="marquee"] {
     flex-direction: column; align-items: flex-start; justify-content: center;
     padding: 0 34px; background: linear-gradient(135deg, #17202b 0%, #0b0d10 70%);
   }
-  .frame[data-frame="marquee"] { padding: 0 90px; }
+  .frame[data-frame^="marquee"] { padding: 0 90px; }
   .name { font-size: 44px; font-weight: 700; letter-spacing: -0.02em; }
-  .frame[data-frame="marquee"] .name { font-size: 84px; }
+  .frame[data-frame^="marquee"] .name { font-size: 84px; }
   .sub { margin-top: 8px; color: #9fb0c0; font-size: 15px; }
-  .frame[data-frame="marquee"] .sub { font-size: 26px; margin-top: 16px; }
+  .frame[data-frame^="marquee"] .sub { font-size: 26px; margin-top: 16px; }
   .rule { width: 64px; height: 4px; margin: 18px 0 0; border-radius: 2px; background: #eb5528; }
 </style></head><body>
 <!--FRAMES-->
-<section class="frame" data-frame="tile">
-  <div class="name">d-tweaks</div><div class="rule"></div>
-  <div class="sub">dアニメストアの PC 表示を作り変える</div>
-</section>
-<section class="frame" data-frame="marquee">
-  <div class="name">d-tweaks</div><div class="rule"></div>
-  <div class="sub">全幅グリッド・全話ならべ・同じ画面で再生・ニコニコのコメント</div>
-</section>
 <script>
   // No inline data: the frame comes from the query, so one file bakes every size.
   const want = new URLSearchParams(location.search).get("frame") || "shot1";

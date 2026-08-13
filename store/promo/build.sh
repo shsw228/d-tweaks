@@ -37,12 +37,19 @@ trap - EXIT
 
 # --- 2. and 3. the store images ---
 python3 "${here}/make.py"
-for frame in shot1:screenshot-1-player shot2:screenshot-2-list shot3:screenshot-3-work \
-             shot4:screenshot-4-top shot5:screenshot-5-settings; do
-  shoot "file://${here}/promo.html?frame=${frame%%:*}" 1280 800 "${out}/${frame##*:}.png"
-  echo "${out}/${frame##*:}.png"
+# One set per language: the store keeps a listing per language, and the images belong to it
+for lang in ja en; do
+  mkdir -p "${out}/${lang}"
+  for frame in shot1:screenshot-1-player shot2:screenshot-2-list shot3:screenshot-3-work \
+               shot4:screenshot-4-top shot5:screenshot-5-settings; do
+    shoot "file://${here}/promo.html?frame=${frame%%:*}-${lang}" 1280 800 \
+      "${out}/${lang}/${frame##*:}.png"
+    echo "${out}/${lang}/${frame##*:}.png"
+  done
+  shoot "file://${here}/promo.html?frame=tile-${lang}" 440 280 \
+    "${out}/${lang}/promo-tile-small.png"
+  echo "${out}/${lang}/promo-tile-small.png"
+  shoot "file://${here}/promo.html?frame=marquee-${lang}" 1400 560 \
+    "${out}/${lang}/promo-marquee.png"
+  echo "${out}/${lang}/promo-marquee.png"
 done
-shoot "file://${here}/promo.html?frame=tile" 440 280 "${out}/promo-tile-small.png"
-echo "${out}/promo-tile-small.png"
-shoot "file://${here}/promo.html?frame=marquee" 1400 560 "${out}/promo-marquee.png"
-echo "${out}/promo-marquee.png"
