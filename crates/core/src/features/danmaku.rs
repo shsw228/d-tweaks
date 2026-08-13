@@ -291,6 +291,105 @@ struct State {
     slow_stats: (Option<(f64, f64, f64)>, Option<f64>),
     /// Time to read `slow_stats` again.
     slow_next: f64,
+    /// The comment histogram under the seek bar. `None` without a control bar.
+    hist: Option<Histogram>,
+}
+
+/// How many comments each part of the video has, as a strip under the seek bar.
+///
+/// The cells are made one time and only their colour changes, so a redraw touches no
+/// layout. A redraw happens when the length of the video becomes known and when the user
+/// moves the comments (`dt-offset`), which is rare.
+struct Histogram {
+    root: Element,
+    cells: Vec<HtmlElement>,
+    /// The (length, offset) that the colours were made for.
+    drawn_for: (f64, f64),
+}
+
+/// Cells of the histogram. The strip is a few hundred pixels wide, so more cells than
+/// this would be thinner than a pixel.
+const HIST_CELLS: usize = 120;
+
+impl Histogram {
+    /// Build the strip inside the box of the seek bar, or `None` if there is no bar.
+    ///
+    /// The bar belongs to `controls`, and it is a sibling of the video, so this looks for
+    /// it from the panel.
+    fn new(document: &Document, stage: &Element) -> Option<Self> {
+        let wrap = stage
+            .closest(".dt-modal__panel")
+            .ok()??
+            .query_selector(&format!(".{}", crate::features::controls::SEEK_WRAP_CLASS))
+            .ok()??;
+        let root = document.create_element("div").ok()?;
+        root.set_class_name("dt-hist");
+        root.set_attribute("title", "コメントの多いところ").ok()?;
+
+        let mut cells = Vec::with_capacity(HIST_CELLS);
+        for _ in 0..HIST_CELLS {
+            let cell: HtmlElement = document.create_element("div").ok()?.dyn_into().ok()?;
+            cell.set_class_name("dt-hist__cell");
+            root.append_child(&cell).ok()?;
+            cells.push(cell);
+        }
+        wrap.append_child(&root).ok()?;
+        Some(Self {
+            root,
+            cells,
+            drawn_for: (0.0, f64::NAN),
+        })
+    }
+
+    /// Colour the cells for a video of `duration` seconds.
+    fn fill(&mut self, comments: &[Raw], duration: f64, offset: f64) {
+        if !duration.is_finite() || duration <= 0.0 {
+            return;
+        }
+        let mut counts = vec![0u32; HIST_CELLS];
+        for comment in comments {
+            // The comment clock and the video clock can differ; the offset is the shift
+            let time = comment.start + offset;
+            if time < 0.0 || time > duration {
+                continue;
+            }
+            let cell = ((time / duration) * HIST_CELLS as f64) as usize;
+            counts[cell.min(HIST_CELLS - 1)] += 1;
+        }
+        let max = counts.iter().copied().max().unwrap_or(0);
+        for (cell, count) in self.cells.iter().zip(&counts) {
+            let _ = cell
+                .style()
+                .set_property("background", &hist_color(*count, max));
+        }
+        self.drawn_for = (duration, offset);
+    }
+}
+
+/// Colour of one cell: nothing, then blue, yellow and red.
+///
+/// The count is put on a square root, because a few seconds of a video have ten times the
+/// comments of the rest and a linear scale then leaves everything else at the first
+/// colour.
+fn hist_color(count: u32, max: u32) -> String {
+    if count == 0 || max == 0 {
+        return "transparent".to_string();
+    }
+    let t = (f64::from(count) / f64::from(max)).sqrt().clamp(0.0, 1.0);
+    // Blue → yellow → red
+    let (from, to, local) = if t < 0.5 {
+        ((90.0, 160.0, 255.0), (255.0, 220.0, 90.0), t * 2.0)
+    } else {
+        ((255.0, 220.0, 90.0), (255.0, 90.0, 80.0), (t - 0.5) * 2.0)
+    };
+    let mix = |a: f64, b: f64| (a + (b - a) * local).round();
+    let alpha = 0.35 + 0.65 * t;
+    format!(
+        "rgba({}, {}, {}, {alpha:.2})",
+        mix(from.0, to.0),
+        mix(from.1, to.1),
+        mix(from.2, to.2)
+    )
 }
 
 /// Colour from `commands`. Also accepts `#RRGGBB` (premium). Default is white.
@@ -1197,8 +1296,19 @@ pub fn start(
         None
     };
 
+    // The histogram sits in the control bar and not in the side column, so it must also
+    // go into the handle: the bar stays when the episode changes.
+    let hist = if raw.is_empty() {
+        None
+    } else {
+        Histogram::new(&document, stage)
+    };
+
     let mut elements = vec![Element::from(canvas.clone()), list.root.clone()];
     elements.extend(offset_row);
+    if let Some(hist) = &hist {
+        elements.push(hist.root.clone());
+    }
     if let Some(debug) = &debug {
         elements.push(debug.root.clone());
     }
@@ -1224,6 +1334,7 @@ pub fn start(
         widths: WidthCache::new(),
         slow_stats: (None, None),
         slow_next: 0.0,
+        hist,
     }));
     let clock = Rc::new(RefCell::new(FrameClock::new()));
 
@@ -1324,6 +1435,16 @@ pub fn start(
             );
             state.list.sync(comment_time);
 
+            // The histogram needs the length of the video, which arrives with the player.
+            // Take it out of the state: `raw` and `hist` cannot be borrowed together.
+            if let Some(mut hist) = state.hist.take() {
+                let duration = video.duration();
+                if hist.drawn_for != (duration, offset.get()) {
+                    hist.fill(&state.raw, duration, offset.get());
+                }
+                state.hist = Some(hist);
+            }
+
             // Read the clock first, so no borrow crosses the call below
             let (frame_number, source_fps, presented, processing, frame_size, want_frame) = {
                 let mut clock = clock.borrow_mut();
@@ -1396,6 +1517,23 @@ pub fn start(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A part of the video without comments must stay empty, and the highest count must
+    /// be the last colour of the ramp.
+    #[test]
+    fn histogram_colors_go_from_nothing_to_red() {
+        assert_eq!(hist_color(0, 100), "transparent");
+        // A count with no maximum cannot be put on the ramp
+        assert_eq!(hist_color(5, 0), "transparent");
+        assert!(hist_color(100, 100).starts_with("rgba(255, 90, 80"));
+        // 1 of 100 is 10% on the square root, so it is still visible (alpha over 0.35)
+        let low = hist_color(1, 100);
+        assert!(low.starts_with("rgba("), "{low}");
+        assert!(
+            !low.contains("0.35)"),
+            "the lowest count must not be the floor: {low}"
+        );
+    }
 
     /// Screen 800px, comment 100px wide, at t=0. With 4 seconds to cross, the
     /// speed is (800+100)/4 = 225px/s, so the right end passes the right edge

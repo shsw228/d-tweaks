@@ -343,9 +343,79 @@ html.dt-modal-open {
   font-variant-numeric: tabular-nums;
 }
 
-.dt-bar__seek {
+/*
+ * The seek bar with the two strips under it: the chapters of the episode and the number
+ * of comments. One box, so the strips have the width and the position of the bar.
+ */
+html:not(.dt-off) .dt-bar__seekWrap {
   flex: 1 1 auto;
   min-width: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dt-bar__seekWrap .dt-bar__seek {
+  flex: none;
+  width: 100%;
+  min-width: 0;
+}
+
+/*
+ * The strips sit inside the track of the range input, so they keep away from the ends:
+ * the middle of the thumb goes from 6px to width - 6px (the thumb is 12px).
+ */
+.dt-bar__chapters,
+.dt-hist {
+  position: relative;
+  flex: none;
+  height: 3px;
+  margin: 0 6px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dt-bar__chapter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+/* The main story. The colour of the site, so the strip reads as "here is the episode" */
+.dt-bar__chapter--main {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* The part before the opening. It is the episode too, so it is not dark */
+.dt-bar__chapter--avant {
+  background: rgba(255, 255, 255, 0.34);
+}
+
+/* Opening, ending and preview */
+.dt-bar__chapter--other {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* The comment histogram. One cell per part of the video; only the colour changes. */
+.dt-hist {
+  display: flex;
+  height: 4px;
+}
+
+.dt-hist__cell {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* A control that has nothing to do (no episode before, no episode after) */
+.dt-bar__button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.dt-bar__button:disabled:hover {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .dt-bar__volume {
