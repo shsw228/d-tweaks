@@ -38,8 +38,13 @@ body {
   line-height: 1.6;
 }
 
+/*
+ * `open_in_tab` is true, so this page has the width of a tab: the limit is this rule and
+ * not Chrome. 640px was the width of one column; the two panes need more, and a line of
+ * text must still stay readable, so the pane below has its own limit.
+ */
 main {
-  max-width: 640px;
+  max-width: 1100px;
   margin-inline: auto;
 }
 
@@ -60,7 +65,7 @@ h1 {
  */
 .layout {
   display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
+  grid-template-columns: 220px minmax(0, 1fr);
   gap: 28px;
   align-items: start;
 }
@@ -94,6 +99,11 @@ h1 {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--accent);
   font-weight: 600;
+}
+
+/* A description must not become one long line */
+.pane {
+  max-width: 760px;
 }
 
 /* The card is the pane now, so it needs no frame of its own */
@@ -272,7 +282,7 @@ body.compact /*
  */
 .layout {
   display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
+  grid-template-columns: 220px minmax(0, 1fr);
   gap: 28px;
   align-items: start;
 }
