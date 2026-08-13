@@ -174,13 +174,96 @@ fn mark_disabled(document: &Document, disabled: bool) {
     };
 }
 
-/// A section heading. Also with `compact`: there are too many rows without them.
-fn build_heading(document: &Document, list: &Element, text: &str) -> Result<(), JsValue> {
+/// Fill the left column and show one card at a time.
+///
+/// Without `#nav` (the popup) this does nothing, and every card stays visible: 200px of
+/// navigation in a 360px popup would leave no room for the rows.
+fn build_nav(document: &Document, cards: Vec<(String, Element)>) -> Result<(), JsValue> {
+    let Some(nav) = document.get_element_by_id("nav") else {
+        return Ok(());
+    };
+    nav.set_inner_html("");
+
+    let elements: std::rc::Rc<Vec<Element>> =
+        std::rc::Rc::new(cards.iter().map(|(_, card)| card.clone()).collect());
+    let buttons: std::rc::Rc<std::cell::RefCell<Vec<Element>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+
+    for (index, (title, card)) in cards.iter().enumerate() {
+        let button = document.create_element("button")?;
+        button.set_class_name("navItem");
+        button.set_attribute("type", "button")?;
+        button.set_text_content(Some(title));
+        if index == 0 {
+            button.class_list().add_1("navItem--on")?;
+        } else {
+            // Only the selected card is in the document flow
+            card.set_attribute("hidden", "")?;
+        }
+        nav.append_child(&button)?;
+        buttons.borrow_mut().push(button.clone());
+
+        let elements = std::rc::Rc::clone(&elements);
+        let buttons = std::rc::Rc::clone(&buttons);
+        let on_click = Closure::<dyn FnMut()>::new(move || {
+            for (other, element) in elements.iter().enumerate() {
+                let _ = if other == index {
+                    element.remove_attribute("hidden")
+                } else {
+                    element.set_attribute("hidden", "")
+                };
+            }
+            for (other, element) in buttons.borrow().iter().enumerate() {
+                let _ = if other == index {
+                    element.class_list().add_1("navItem--on")
+                } else {
+                    element.class_list().remove_1("navItem--on")
+                };
+            }
+        });
+        button.add_event_listener_with_callback("click", on_click.as_ref().unchecked_ref())?;
+        on_click.forget();
+    }
+    Ok(())
+}
+
+/// A card for one group, with its heading. The rows go inside it.
+///
+/// A heading and its rows in one box makes the group visible; a heading between flat rows
+/// does not (measured on the eye: 20 rows in one column read as one list).
+fn build_card(document: &Document, list: &Element, title: &str) -> Result<Element, JsValue> {
+    let card = document.create_element("section")?;
+    card.set_class_name("card");
     let heading = document.create_element("h2")?;
     heading.set_class_name("group");
-    heading.set_text_content(Some(text));
-    list.append_child(&heading)?;
-    Ok(())
+    heading.set_text_content(Some(title));
+    card.append_child(&heading)?;
+    list.append_child(&card)?;
+    Ok(card)
+}
+
+/// The main switch, over the cards.
+///
+/// It is not in a group: it decides whether any other setting does anything, so it gets
+/// its own place and its own look.
+fn build_master(
+    document: &Document,
+    list: &Element,
+    enabled: bool,
+    compact: bool,
+) -> Result<(), JsValue> {
+    let card = document.create_element("section")?;
+    card.set_class_name("card card--master");
+    list.append_child(&card)?;
+    build_toggle(
+        document,
+        &card,
+        settings::ENABLED,
+        "この拡張を有効にする",
+        "切ると、すべての表示改造を止めてサイト本来の見た目に戻します（Chrome の拡張機能そのものは切りません）。開いているタブはその場で戻り、こちらの UI を出し直すにはページの再読み込みが必要です。",
+        enabled,
+        compact,
+    )
 }
 
 /// Add the buttons that only the popup has (reload, open the options page).
@@ -323,46 +406,70 @@ pub fn start() -> Result<(), JsValue> {
             }
         };
 
-        // The main switch is first, and alone
-        render(build_heading(&document, &list, "全体"));
-        render(build_toggle(
-            &document,
-            &list,
-            settings::ENABLED,
-            "この拡張を有効にする",
-            "切ると、すべての表示改造を止めてサイト本来の見た目に戻します（Chrome の拡張機能そのものは切りません）。開いているタブはその場で戻り、こちらの UI を出し直すにはページの再読み込みが必要です。",
-            snapshot.enabled,
-            compact,
-        ));
+        // The main switch is first, alone and large: it decides what the rest does
+        render(build_master(&document, &list, snapshot.enabled, compact));
 
-        render(build_heading(&document, &list, "表示を変える"));
-        for (feature, on) in FEATURES.iter().zip(&snapshot.features) {
-            render(build_toggle(
-                &document,
-                &list,
-                feature.id,
-                feature.label,
-                feature.description,
-                *on,
-                compact,
-            ));
+        // One card per place. A user looks for "the setting of the player", not for "a
+        // switch", so the kinds are mixed inside a card and the order comes from `GROUPS`.
+        let mut cards: Vec<(String, Element)> = Vec::new();
+        for group in settings::GROUPS {
+            let card = match build_card(&document, &list, group) {
+                Ok(card) => card,
+                Err(err) => {
+                    web_sys::console::error_1(&err);
+                    continue;
+                }
+            };
+            let mut count = 0;
+
+            for (feature, on) in FEATURES.iter().zip(&snapshot.features) {
+                if feature.group != *group {
+                    continue;
+                }
+                count += 1;
+                render(build_toggle(
+                    &document,
+                    &card,
+                    feature.id,
+                    feature.label,
+                    feature.description,
+                    *on,
+                    compact,
+                ));
+            }
+            for (switch, on) in SWITCHES.iter().zip(&snapshot.switches) {
+                if switch.group != *group {
+                    continue;
+                }
+                count += 1;
+                render(build_toggle(
+                    &document,
+                    &card,
+                    switch.id,
+                    switch.label,
+                    switch.description,
+                    *on,
+                    compact,
+                ));
+            }
+            for (choice, current) in CHOICES.iter().zip(&snapshot.choices) {
+                if choice.group != *group {
+                    continue;
+                }
+                count += 1;
+                render(build_choice(&document, &card, choice, current, compact));
+            }
+
+            // A group with no entry must not leave a heading
+            if count == 0 {
+                card.remove();
+            } else {
+                cards.push(((*group).to_string(), card));
+            }
         }
 
-        render(build_heading(&document, &list, "細かい設定"));
-        for (switch, on) in SWITCHES.iter().zip(&snapshot.switches) {
-            render(build_toggle(
-                &document,
-                &list,
-                switch.id,
-                switch.label,
-                switch.description,
-                *on,
-                compact,
-            ));
-        }
-        for (choice, current) in CHOICES.iter().zip(&snapshot.choices) {
-            render(build_choice(&document, &list, choice, current, compact));
-        }
+        // The options page has a left column; the popup has none and keeps one column
+        render(build_nav(&document, cards));
     });
 
     Ok(())
