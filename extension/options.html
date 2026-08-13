@@ -12,9 +12,20 @@
       <p class="lead">
         切り替えると即座に保存されます。すでに開いているタブには再読み込み後に反映されます。
       </p>
-      <!-- crates/options builds the rows from the settings tables -->
-      <div id="settings"></div>
-      <p id="status"></p>
+      <!--
+        Two panes: the groups on the left, the rows of the selected group on the right.
+        `crates/options` fills both from the settings tables, so this file has no names.
+        The popup has no `#nav`, and then the same code draws one column.
+      -->
+      <!-- The main switch is over both columns -->
+      <div id="master"></div>
+      <div class="layout">
+        <nav id="nav" aria-label="設定の種類"></nav>
+        <div class="pane">
+          <div id="settings"></div>
+          <p id="status"></p>
+        </div>
+      </div>
     </main>
     <!-- The CSP (script-src 'self') has no inline script, so this is a real file -->
     <script type="module" src="./settings-loader.js"></script>

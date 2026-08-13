@@ -174,6 +174,59 @@ fn mark_disabled(document: &Document, disabled: bool) {
     };
 }
 
+/// Fill the left column and show one card at a time.
+///
+/// Without `#nav` (the popup) this does nothing, and every card stays visible: 200px of
+/// navigation in a 360px popup would leave no room for the rows.
+fn build_nav(document: &Document, cards: Vec<(String, Element)>) -> Result<(), JsValue> {
+    let Some(nav) = document.get_element_by_id("nav") else {
+        return Ok(());
+    };
+    nav.set_inner_html("");
+
+    let elements: std::rc::Rc<Vec<Element>> =
+        std::rc::Rc::new(cards.iter().map(|(_, card)| card.clone()).collect());
+    let buttons: std::rc::Rc<std::cell::RefCell<Vec<Element>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+
+    for (index, (title, card)) in cards.iter().enumerate() {
+        let button = document.create_element("button")?;
+        button.set_class_name("navItem");
+        button.set_attribute("type", "button")?;
+        button.set_text_content(Some(title));
+        if index == 0 {
+            button.class_list().add_1("navItem--on")?;
+        } else {
+            // Only the selected card is in the document flow
+            card.set_attribute("hidden", "")?;
+        }
+        nav.append_child(&button)?;
+        buttons.borrow_mut().push(button.clone());
+
+        let elements = std::rc::Rc::clone(&elements);
+        let buttons = std::rc::Rc::clone(&buttons);
+        let on_click = Closure::<dyn FnMut()>::new(move || {
+            for (other, element) in elements.iter().enumerate() {
+                let _ = if other == index {
+                    element.remove_attribute("hidden")
+                } else {
+                    element.set_attribute("hidden", "")
+                };
+            }
+            for (other, element) in buttons.borrow().iter().enumerate() {
+                let _ = if other == index {
+                    element.class_list().add_1("navItem--on")
+                } else {
+                    element.class_list().remove_1("navItem--on")
+                };
+            }
+        });
+        button.add_event_listener_with_callback("click", on_click.as_ref().unchecked_ref())?;
+        on_click.forget();
+    }
+    Ok(())
+}
+
 /// A card for one group, with its heading. The rows go inside it.
 ///
 /// A heading and its rows in one box makes the group visible; a heading between flat rows
@@ -358,6 +411,7 @@ pub fn start() -> Result<(), JsValue> {
 
         // One card per place. A user looks for "the setting of the player", not for "a
         // switch", so the kinds are mixed inside a card and the order comes from `GROUPS`.
+        let mut cards: Vec<(String, Element)> = Vec::new();
         for group in settings::GROUPS {
             let card = match build_card(&document, &list, group) {
                 Ok(card) => card,
@@ -409,8 +463,13 @@ pub fn start() -> Result<(), JsValue> {
             // A group with no entry must not leave a heading
             if count == 0 {
                 card.remove();
+            } else {
+                cards.push(((*group).to_string(), card));
             }
         }
+
+        // The options page has a left column; the popup has none and keeps one column
+        render(build_nav(&document, cards));
     });
 
     Ok(())
