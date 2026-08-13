@@ -16,12 +16,15 @@ use std::rc::Rc;
 use js_sys::Date;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::spawn_local;
 use web_sys::{
     Document, Element, HtmlElement, HtmlIFrameElement, HtmlInputElement, HtmlMediaElement,
     KeyboardEvent, KeyboardEventInit,
 };
 
-use crate::features::{frame, player_modal};
+use d_tweaks_shared::json;
+
+use crate::features::{comments, frame, player_modal};
 use crate::{log, timestamp};
 
 /// Interval of the display. The seek bar is smooth enough at this rate.
@@ -38,6 +41,9 @@ const HOLD_MS: f64 = 500.0;
 const SPEEDS: &[f64] = &[1.0, 1.25, 1.5, 2.0, 0.75];
 /// Marks a control that is off.
 const OFF_CLASS: &str = "dt-bar__button--off";
+/// The box around the seek bar. `danmaku` puts the comment histogram in it, so keep the
+/// name the same as there.
+pub(crate) const SEEK_WRAP_CLASS: &str = "dt-bar__seekWrap";
 /// Put on the panel to hide the danmaku.
 const HIDE_DANMAKU_CLASS: &str = "dt-hide-danmaku";
 /// Marks a button that a narrow screen can remove.
@@ -86,6 +92,17 @@ fn on_input<F: FnMut() + 'static>(target: &Element, handler: F) -> Result<(), Js
     target.add_event_listener_with_callback("input", closure.as_ref().unchecked_ref())?;
     closure.forget();
     Ok(())
+}
+
+/// Turn a button off, so a click cannot happen.
+///
+/// A `<button>` with `disabled` sends no click, so the handler needs no test.
+fn set_disabled(element: &Element, disabled: bool) {
+    let _ = if disabled {
+        element.set_attribute("disabled", "")
+    } else {
+        element.remove_attribute("disabled")
+    };
 }
 
 /// A class shows the on or off state.
@@ -192,6 +209,83 @@ pub(crate) fn click_native(iframe: &HtmlIFrameElement, selector: &str) {
     }
 }
 
+/// Read what `WS010105` says about this episode and write it into the bar.
+///
+/// Two things come from that reply:
+///
+/// - `prevContentInfoUri` and `nextContentInfoUri`. The player of the site uses the same
+///   two values to decide if a step is possible, so an empty value means that the button
+///   has nothing to do, and the button goes off.
+/// - `chapters`, which becomes the strip under the seek bar.
+///
+/// `comments::part_data` keeps the last reply, and the head bar and the comments ask for
+/// the same episode, so this adds no request.
+async fn apply_part(part_id: &str, prev: &Element, next: &Element, chapters: &Element) {
+    let Some(data) = comments::part_data(part_id).await else {
+        // Without the reply, leave the buttons as they are: a step is more probable than
+        // no step, and a button that does nothing is better than a step that is not
+        // possible
+        return;
+    };
+    let has = |key: &str| {
+        json::get_string(&data, key)
+            .map(|value| !value.trim().is_empty())
+            .unwrap_or(false)
+    };
+    set_disabled(prev, !has("prevContentInfoUri"));
+    set_disabled(next, !has("nextContentInfoUri"));
+    draw_chapters(chapters, &data);
+}
+
+/// Draw the chapters of the episode as a strip.
+///
+/// `chapters` has the parts of the episode in milliseconds (`type`, `start`, `end`), and
+/// `player_meta` already uses them for the skip button. On the strip they show where the
+/// opening, the main story and the ending are, so a drag can go to the right place.
+///
+/// A type that is not `mainStory` or `avant` is `none`: the opening, the ending and the
+/// preview all use that type, so they get one colour.
+fn draw_chapters(strip: &Element, data: &JsValue) {
+    strip.set_inner_html("");
+    let Some(total) = json::get_f64(data, "partMeasureSecond").filter(|s| *s > 0.0) else {
+        return;
+    };
+    let Some(chapters) = json::get_array(data, "chapters") else {
+        return;
+    };
+    let Some(document) = strip.owner_document() else {
+        return;
+    };
+
+    for chapter in chapters.iter() {
+        let Some(start) = json::get_f64(&chapter, "start").map(|ms| ms / 1000.0) else {
+            continue;
+        };
+        let Some(end) = json::get_f64(&chapter, "end").map(|ms| ms / 1000.0) else {
+            continue;
+        };
+        if end <= start {
+            continue;
+        }
+        let kind = match json::get_string(&chapter, "type").as_deref() {
+            Some("mainStory") => "main",
+            Some("avant") => "avant",
+            _ => "other",
+        };
+        let Ok(segment) = document.create_element("div") else {
+            continue;
+        };
+        segment.set_class_name(&format!("dt-bar__chapter dt-bar__chapter--{kind}"));
+        if let Some(style) = segment.dyn_ref::<HtmlElement>().map(|el| el.style()) {
+            let left = (start / total * 100.0).clamp(0.0, 100.0);
+            let width = ((end - start) / total * 100.0).clamp(0.0, 100.0 - left);
+            let _ = style.set_property("left", &format!("{left}%"));
+            let _ = style.set_property("width", &format!("{width}%"));
+        }
+        let _ = strip.append_child(&segment);
+    }
+}
+
 fn seek_by(video: &Target, delta: f64) {
     let borrowed = video.borrow();
     let Some(video) = borrowed.as_ref() else {
@@ -230,7 +324,13 @@ pub fn install(panel: &Element, bar: &Element, iframe: &HtmlIFrameElement) -> Re
     time.set_class_name("dt-bar__time");
     time.set_text_content(Some("0:00 / 0:00"));
 
+    // The seek bar and the strips under it are one box, so the strips keep the width and
+    // the position of the bar itself.
+    let seek_wrap = document.create_element("div")?;
+    seek_wrap.set_class_name(SEEK_WRAP_CLASS);
     let seek = slider(&document, "dt-bar__seek", SEEK_STEPS, "再生位置")?;
+    let chapters = document.create_element("div")?;
+    chapters.set_class_name("dt-bar__chapters");
     let speed = button(&document, "1.0×", "再生速度を切り替える")?;
     let mute = button(&document, "音", "ミュート")?;
     let volume = slider(&document, "dt-bar__volume", 100.0, "音量")?;
@@ -260,7 +360,9 @@ pub fn install(panel: &Element, bar: &Element, iframe: &HtmlIFrameElement) -> Re
     ] {
         bar.append_child(element)?;
     }
-    bar.append_child(&seek)?;
+    seek_wrap.append_child(&seek)?;
+    seek_wrap.append_child(&chapters)?;
+    bar.append_child(&seek_wrap)?;
     bar.append_child(&speed)?;
     bar.append_child(&mute)?;
     bar.append_child(&volume)?;
@@ -436,6 +538,11 @@ pub fn install(panel: &Element, bar: &Element, iframe: &HtmlIFrameElement) -> Re
         let native_hidden = Rc::clone(&native_hidden_flag);
         let seek = seek.clone();
         let volume = volume.clone();
+        // The episode of the last read of `WS010105`
+        let last_part = Rc::new(RefCell::new(String::new()));
+        let prev_for_tick = prev.clone();
+        let next_for_tick = next.clone();
+        let chapters_for_tick = chapters.clone();
         Closure::<dyn FnMut()>::new(move || {
             let Some(window) = web_sys::window() else {
                 return;
@@ -458,6 +565,20 @@ pub fn install(panel: &Element, bar: &Element, iframe: &HtmlIFrameElement) -> Re
                     apply_native_hidden(&iframe, native_hidden.get());
                 }
             }
+            // A new episode changes what the two episode buttons can do, and it changes
+            // the chapters. The partId comes from the URL of the iframe, which is
+            // readable before the `<video>` is there.
+            let part_id = frame::part_id(&iframe).unwrap_or_default();
+            if !part_id.is_empty() && *last_part.borrow() != part_id {
+                *last_part.borrow_mut() = part_id.clone();
+                let prev = prev_for_tick.clone();
+                let next = next_for_tick.clone();
+                let chapters = chapters_for_tick.clone();
+                spawn_local(async move {
+                    apply_part(&part_id, &prev, &next, &chapters).await;
+                });
+            }
+
             let borrowed = video.borrow();
             let Some(video) = borrowed.as_ref() else {
                 return;
