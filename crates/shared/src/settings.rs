@@ -90,6 +90,8 @@ pub const ENABLED_CSS: &str = "styles/enabled.css";
 pub const ENABLED_VAR: &str = "--dt-enabled";
 
 pub struct FeatureDef {
+    /// Where this setting acts. The UI makes one card per group (`GROUPS`).
+    pub group: &'static str,
     /// Key in the storage. Also the id of the registration.
     pub id: &'static str,
     pub label: &'static str,
@@ -98,63 +100,88 @@ pub struct FeatureDef {
     pub css: &'static [&'static str],
 }
 
+/// The order of the cards in the settings UI.
+///
+/// The UI groups by place and not by kind: a user looks for "the setting of the player",
+/// not for "a switch" or "a list". A group with no entry is not drawn, so a new group name
+/// only needs a line here and the same text in the table.
+pub const GROUPS: &[&str] = &[
+    "サイト全体",
+    "トップページ",
+    "一覧",
+    "作品ページ",
+    "検索",
+    "再生",
+    "コメント",
+];
+
 pub const FEATURES: &[FeatureDef] = &[
     FeatureDef {
         id: "list-grid",
+        group: "一覧",
         label: "一覧を全幅グリッドで表示する",
         description: "860px 固定 2 列の一覧（続きから見る / 気になる / 視聴履歴 / コンプリート / 全アニメ一覧）を、画面幅いっぱいのグリッドにします。",
         css: &["styles/list-grid.css"],
     },
     FeatureDef {
         id: "episode-grid",
+        group: "作品ページ",
         label: "エピソードを全話並べる",
         description: "作品ページのエピソード一覧を、12 話ずつの横送りから全話のグリッドに変えます。",
         css: &["styles/episode-grid.css"],
     },
     FeatureDef {
         id: "no-promo",
+        group: "サイト全体",
         label: "ポップアップ広告を出さない",
         description: "クーポン等の全面ポップアップ（サイトの dialog.popup-wrapper）を閉じます。隠すだけではページ全体が押せないままになるので、閉じるところまでやります。",
         css: &["styles/no-promo.css"],
     },
     FeatureDef {
         id: "top-page",
+        group: "トップページ",
         label: "トップページを組み替える",
         description: "15 本ある横スクロールの帯（中身の幅は 4000〜10000px）を、自前の 1 画面に組み替えます。注目 1 作品のヒーロー・今日更新・順位つきランキング・チップで切り替える「さがす」の 4 段構成で、縦 4700px → 1372px になります。",
         css: &["styles/top-page.css"],
     },
     FeatureDef {
         id: "work-hero",
+        group: "作品ページ",
         label: "作品ページの見出しを全幅にする",
         description: "キービジュアル・タイトル・操作を全幅のヒーローにまとめます。見出しの高さが 563px から 320px になり、エピソード一覧が早く出ます。",
         css: &["styles/work-hero.css"],
     },
     FeatureDef {
         id: "work-detail",
+        group: "作品ページ",
         label: "作品情報を表にまとめる",
         description: "あらすじ・ジャンル・キャスト・スタッフの折りたたみをやめ、役名と担当者を対にした表で並べます。",
         css: &["styles/work-detail.css"],
     },
     FeatureDef {
         id: "infinite-scroll",
+        group: "一覧",
         label: "一覧を無限スクロールにする",
         description: "マイページ系の一覧でページ送りを隠し、スクロールで次のページを継ぎ足します。",
         css: &["styles/infinite-scroll.css"],
     },
     FeatureDef {
         id: "player-modal",
+        group: "再生",
         label: "同じ画面内のウィンドウで再生する",
         description: "再生ボタンでページ遷移せず、一覧の上に重ねて再生します。Esc または背景クリックで閉じます。",
         css: &["styles/player-modal.css"],
     },
     FeatureDef {
         id: "search-overlay",
+        group: "検索",
         label: "「さがす」をフロート検索にする",
         description: "ヘッダの「さがす」でページ遷移せず、打ちながら結果が出るフロートを重ねます（⌘K / Ctrl+K、/ でも開きます）。",
         css: &["styles/search-overlay.css"],
     },
     FeatureDef {
         id: "comments",
+        group: "コメント",
         label: "ニコニコのコメントを表示する",
         description: "フロート再生中に、ニコニコ動画の公式配信から同じ話のコメントを取ってきて重ねます。作品名と話数で動画を突き合わせるため、見つからないこともあります。",
         // The CSS is in player-modal.css; this only appears inside the float
@@ -162,6 +189,7 @@ pub const FEATURES: &[FeatureDef] = &[
     },
     FeatureDef {
         id: "debug-view",
+        group: "再生",
         label: "動画情報のデバッグ表示を出す",
         description: "フロート再生の右下に、配信フレームレート・コマ番号・解像度・先読み・フレーム落ちなどを重ねます。",
         css: &[],
@@ -170,6 +198,8 @@ pub const FEATURES: &[FeatureDef] = &[
 
 /// A setting that has no CSS of its own: a detail of the behaviour.
 pub struct SwitchDef {
+    /// Where this setting acts (`GROUPS`).
+    pub group: &'static str,
     pub id: &'static str,
     pub label: &'static str,
     pub description: &'static str,
@@ -188,24 +218,28 @@ pub const TOP_NO_RENTAL: &str = "top-no-rental";
 pub const SWITCHES: &[SwitchDef] = &[
     SwitchDef {
         id: SEARCH_NO_RENTAL,
+        group: "検索",
         label: "検索でレンタル作品を除く",
         description: "見放題だけを出します。除外は API（vodTypeList）に任せるので、件数表示も除いた後の数になります。フロート検索のトグルと同じ設定です。",
         default: true,
     },
     SwitchDef {
         id: PLAYER_SKIP,
+        group: "再生",
         label: "本編へのスキップボタンを出す",
         description: "配信データの章立てから、映像の右下に「本編へスキップ」を出します（判定はサイトのプレイヤーと同じ規則）。エンディングでは「次の話へ」になります。アバン（本編相当）は飛ばさず、自動スキップもしません。",
         default: true,
     },
     SwitchDef {
         id: TOP_NO_RENTAL,
+        group: "トップページ",
         label: "トップからレンタル販売の作品を除く",
         description: "自前のトップページ（今日更新・ランキング・さがす）から、レンタル販売の作品を外します。レンタル作品の一覧（300 件）を 1 日 1 回だけ取り、作品 ID で突き合わせます。",
         default: true,
     },
     SwitchDef {
         id: SEARCH_SHORTCUTS,
+        group: "検索",
         label: "キーボードでフロート検索を開く",
         description: "⌘K（Ctrl+K）と / で検索を開きます。切ってもヘッダの「さがす」からは開けます。",
         default: true,
@@ -217,6 +251,8 @@ pub const SWITCHES: &[SwitchDef] = &[
 /// This is a table of its own, so the options page and the popup can build a column of
 /// switches and a column of lists.
 pub struct ChoiceDef {
+    /// Where this setting acts (`GROUPS`).
+    pub group: &'static str,
     pub id: &'static str,
     pub label: &'static str,
     pub description: &'static str,
@@ -228,6 +264,7 @@ pub struct ChoiceDef {
 pub const CHOICES: &[ChoiceDef] = &[
     ChoiceDef {
         id: DANMAKU_FPS_KEY,
+        group: "コメント",
         label: "弾幕の描画レート",
         description: "上げるほど滑らかに流れますが、そのぶん CPU を使います。コマ数の表示は映像基準の 24fps 固定です。",
         options: &[
@@ -240,6 +277,7 @@ pub const CHOICES: &[ChoiceDef] = &[
     },
     ChoiceDef {
         id: DANMAKU_DURATION_KEY,
+        group: "コメント",
         label: "弾幕が流れきる時間",
         description: "コメントが画面を横切るのにかける秒数です。長くすると読みやすくなり、そのぶん同時に出る本数が増えます。",
         options: &[
@@ -252,6 +290,7 @@ pub const CHOICES: &[ChoiceDef] = &[
     },
     ChoiceDef {
         id: SEARCH_SORT_KEY,
+        group: "検索",
         label: "検索の既定の並び",
         description: "フロート検索を開いたときの並び順です。開いた後はその場でも変えられます。",
         // The same values as the search page of the site (#listsort)
@@ -267,6 +306,7 @@ pub const CHOICES: &[ChoiceDef] = &[
     },
     ChoiceDef {
         id: CARD_MIN_WIDTH_KEY,
+        group: "一覧",
         label: "一覧カードの下限幅",
         description: "この幅を下回らない範囲で列数が決まります。狭くすると 1 画面に多く並び、広くすると 1 枚が大きくなります。",
         options: &[
@@ -280,6 +320,7 @@ pub const CHOICES: &[ChoiceDef] = &[
     },
     ChoiceDef {
         id: THUMB_SIZE_KEY,
+        group: "一覧",
         label: "サムネイルの解像度",
         description: "全幅グリッドではサイトが配る画像（288px など）が引き伸ばされてぼやけるので、既定では 640px 版に差し替えます。通信量を増やしたくないときは「そのまま」を選んでください。",
         // The site also has 1280 and 1920, but they are not options here: they are 12.5
