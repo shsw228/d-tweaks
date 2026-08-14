@@ -19,10 +19,7 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys::{Document, Element, Event, HtmlInputElement, HtmlOptionElement, HtmlSelectElement};
 
 use d_tweaks_shared::settings::{self, CHOICES, FEATURES, SWITCHES};
-
-/// Message after a write. A tab that is already open needs a reload.
-const SAVED: &str = "保存しました。開いているタブは再読み込みしてください。";
-const FAILED: &str = "保存に失敗しました。";
+use d_tweaks_shared::text::t;
 
 fn set_status(document: &Document, message: &str) {
     if let Some(status) = document.get_element_by_id("status") {
@@ -94,8 +91,8 @@ fn build_toggle(
         let document = status_target.clone();
         spawn_local(async move {
             let message = match settings::save_one(id, value).await {
-                Ok(()) => SAVED,
-                Err(_) => FAILED,
+                Ok(()) => t("options.saved"),
+                Err(_) => t("options.failed"),
             };
             set_status(&document, message);
             // The main switch also changes the appearance of the other rows
@@ -119,7 +116,8 @@ fn build_choice(
     current: &str,
     compact: bool,
 ) -> Result<(), JsValue> {
-    let (row_el, text) = row(document, choice.label, choice.description, compact)?;
+    let (label, description) = settings::words(choice.id, choice.label, choice.description);
+    let (row_el, text) = row(document, label, description, compact)?;
 
     let select: HtmlSelectElement = document.create_element("select")?.dyn_into()?;
     select.set_class_name("choice");
@@ -127,7 +125,7 @@ fn build_choice(
     for (value, label) in choice.options {
         let option: HtmlOptionElement = document.create_element("option")?.dyn_into()?;
         option.set_value(value);
-        option.set_text_content(Some(label));
+        option.set_text_content(Some(settings::option_label(label)));
         if *value == current {
             option.set_selected(true);
         }
@@ -150,8 +148,8 @@ fn build_choice(
         let document = status_target.clone();
         spawn_local(async move {
             let message = match settings::save_choice(id, &value).await {
-                Ok(()) => SAVED,
-                Err(_) => FAILED,
+                Ok(()) => t("options.saved"),
+                Err(_) => t("options.failed"),
             };
             set_status(&document, message);
         });
@@ -227,6 +225,31 @@ fn build_nav(document: &Document, cards: Vec<(String, Element)>) -> Result<(), J
     Ok(())
 }
 
+/// Put the words of the page itself in the language of the UI.
+///
+/// The two HTML files hold Japanese, so that a failure of the WASM still shows a readable
+/// page. This replaces them when the WASM runs.
+fn apply_page_words(document: &Document, compact: bool) {
+    let set = |id: &str, key: &str| {
+        if let Some(el) = document.get_element_by_id(id) {
+            el.set_text_content(Some(t(key)));
+        }
+    };
+    if let Some(lead) = document.query_selector(".lead").ok().flatten() {
+        lead.set_text_content(Some(t(if compact {
+            "options.lead.compact"
+        } else {
+            "options.lead"
+        })));
+    }
+    if let Some(nav) = document.get_element_by_id("nav") {
+        let _ = nav.set_attribute("aria-label", t("options.nav.label"));
+    }
+    set("reload", "popup.reload");
+    set("openOptions", "popup.options");
+    set("clearCache", "popup.clear");
+}
+
 /// A card for one group, with its heading. The rows go inside it.
 ///
 /// A heading and its rows in one box makes the group visible; a heading between flat rows
@@ -259,8 +282,8 @@ fn build_master(
         document,
         &card,
         settings::ENABLED,
-        "この拡張を有効にする",
-        "切ると、すべての表示改造を止めてサイト本来の見た目に戻します（Chrome の拡張機能そのものは切りません）。開いているタブはその場で戻り、こちらの UI を出し直すにはページの再読み込みが必要です。",
+        t("options.master"),
+        t("options.master.desc"),
         enabled,
         compact,
     )
@@ -293,11 +316,11 @@ fn install_actions(document: &Document) -> Result<(), JsValue> {
             let document = status_target.clone();
             spawn_local(async move {
                 let message = match clear_comment_cache().await {
-                    Ok(0) => "消すものがありませんでした。".to_string(),
+                    Ok(0) => t("popup.cleared.none").to_string(),
                     Ok(count) => {
                         format!("コメントの控えを {count} 件消しました。再生し直すと引き直します。")
                     }
-                    Err(_) => "控えを消せませんでした。".to_string(),
+                    Err(_) => t("popup.cleared.failed").to_string(),
                 };
                 set_status(&document, &message);
             });
@@ -389,6 +412,7 @@ pub fn start() -> Result<(), JsValue> {
             return;
         };
 
+        d_tweaks_shared::text::init(settings::ui_lang().await);
         let snapshot = match settings::snapshot().await {
             Ok(snapshot) => snapshot,
             Err(err) => {
@@ -398,6 +422,7 @@ pub fn start() -> Result<(), JsValue> {
             }
         };
 
+        apply_page_words(&document, compact);
         list.set_inner_html("");
         mark_disabled(&document, !snapshot.enabled);
         let render = |result: Result<(), JsValue>| {
@@ -413,7 +438,7 @@ pub fn start() -> Result<(), JsValue> {
         // switch", so the kinds are mixed inside a card and the order comes from `GROUPS`.
         let mut cards: Vec<(String, Element)> = Vec::new();
         for group in settings::GROUPS {
-            let card = match build_card(&document, &list, group) {
+            let card = match build_card(&document, &list, settings::group_label(group)) {
                 Ok(card) => card,
                 Err(err) => {
                     web_sys::console::error_1(&err);
@@ -427,12 +452,14 @@ pub fn start() -> Result<(), JsValue> {
                     continue;
                 }
                 count += 1;
+                let (label, description) =
+                    settings::words(feature.id, feature.label, feature.description);
                 render(build_toggle(
                     &document,
                     &card,
                     feature.id,
-                    feature.label,
-                    feature.description,
+                    label,
+                    description,
                     *on,
                     compact,
                 ));
@@ -442,12 +469,14 @@ pub fn start() -> Result<(), JsValue> {
                     continue;
                 }
                 count += 1;
+                let (label, description) =
+                    settings::words(switch.id, switch.label, switch.description);
                 render(build_toggle(
                     &document,
                     &card,
                     switch.id,
-                    switch.label,
-                    switch.description,
+                    label,
+                    description,
                     *on,
                     compact,
                 ));
@@ -464,7 +493,8 @@ pub fn start() -> Result<(), JsValue> {
             if count == 0 {
                 card.remove();
             } else {
-                cards.push(((*group).to_string(), card));
+                // The name of the card, in the language of the UI: the left column shows it
+                cards.push((settings::group_label(group).to_string(), card));
             }
         }
 

@@ -1,0 +1,14 @@
+{
+  "appName": {
+    "message": "d-tweaks",
+    "description": "拡張の名前。ストアの掲載名にもなる。"
+  },
+  "appDesc": {
+    "message": "【非公式】dアニメストアの表示を作り変えます。一覧の全幅グリッド化、エピソード全話表示、無限スクロール、同じ画面での再生。",
+    "description": "ストアの説明と拡張機能ページの説明。132 文字まで。"
+  },
+  "actionTitle": {
+    "message": "d-tweaks の設定",
+    "description": "ツールバーのアイコンに出る文字。"
+  }
+}

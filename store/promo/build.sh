@@ -29,9 +29,12 @@ python3 -m http.server "${port}" -d "${root}" >/dev/null 2>&1 &
 server=$!
 trap 'kill "${server}" 2>/dev/null || true' EXIT
 sleep 1
-# The group with the most rows, so the picture is not a group with one row
-shoot "http://localhost:${port}/store/promo/settings-preview.html?group=%E4%B8%80%E8%A6%A7" \
-  1280 900 "${shots}/raw-05-settings.png"
+# The group with the most rows, so the picture is not a group with one row. `lang` makes
+# the UI draw in that language, the same as the setting does.
+shoot "http://localhost:${port}/store/promo/settings-preview.html?lang=ja&group=%E4%B8%80%E8%A6%A7" \
+  1280 900 "${shots}/raw-05-settings-ja.png"
+shoot "http://localhost:${port}/store/promo/settings-preview.html?lang=en&group=Lists" \
+  1280 900 "${shots}/raw-05-settings-en.png"
 kill "${server}" 2>/dev/null || true
 trap - EXIT
 

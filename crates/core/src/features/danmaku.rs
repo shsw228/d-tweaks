@@ -20,6 +20,7 @@ use web_sys::{
     HtmlMediaElement,
 };
 
+use d_tweaks_shared::text::t;
 use d_tweaks_shared::{chrome, json};
 
 use crate::features::frame;
@@ -324,7 +325,7 @@ impl Histogram {
             .ok()??;
         let root = document.create_element("div").ok()?;
         root.set_class_name("dt-hist");
-        root.set_attribute("title", "コメントの多いところ").ok()?;
+        root.set_attribute("title", t("hist.title")).ok()?;
 
         let mut cells = Vec::with_capacity(HIST_CELLS);
         for _ in 0..HIST_CELLS {
@@ -868,16 +869,13 @@ fn build_offset(
 
     let label = document.create_element("span")?;
     label.set_class_name("dt-offset__label");
-    label.set_text_content(Some("コメント位置"));
-    label.set_attribute(
-        "title",
-        "既定は先頭揃え（0）。ニコニコ版の尺が長いぶんは末尾の広告なので、通常はずらさなくてよい",
-    )?;
+    label.set_text_content(Some(t("offset.label")));
+    label.set_attribute("title", t("offset.title"))?;
     root.append_child(&label)?;
 
     let value = document.create_element("span")?;
     value.set_class_name("dt-offset__value");
-    value.set_attribute("title", "クリックで 0 に戻す")?;
+    value.set_attribute("title", t("offset.reset.title"))?;
     value.set_text_content(Some(&format_offset(0.0)));
 
     // Order: -5 -1 value +1 +5. The value goes before the first positive step.

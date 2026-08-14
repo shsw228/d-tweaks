@@ -274,6 +274,29 @@ The options page can remove the cache. That page writes to the storage directly,
 so the service worker must forget the copy. `sw.js` sends
 `on_comment_cache_cleared` when the index key is removed.
 
+## Two languages
+
+The words that this extension shows have two sources, and they do not overlap:
+
+| What | Where | Who decides the language |
+|---|---|---|
+| Name and description in the store and on the extensions page | `extension/_locales/<lang>/messages.json` | Chrome, from the browser |
+| Every word of the own UI | `shared::text::WORDS` and the `EN` column of `settings` | The user (`ui-lang`) |
+
+`chrome.i18n` cannot do the second one: it follows the browser and an extension cannot
+change it. The service is Japanese, so a user with an English browser can still want
+Japanese words, and the other way round. So the language of the UI is a setting, `text`
+keeps it in a `thread_local` (the drawing code is not async), and `t(key)` reads it.
+
+Two rules keep this cheap:
+
+- A key that is not in the table gives the key back, so a missing word is visible at once.
+- A missing English word gives the Japanese one, so a half-translated table still works.
+  The same is true of `settings::EN`: a setting without a line there stays Japanese.
+
+The values of the lists (`CHOICES`) hold a key (`opt.…`) when they are words and the text
+itself when they are not (`24 fps`), so a list of numbers needs no entry in the table.
+
 ## Traps
 
 These problems are difficult to find. Each one cost time.

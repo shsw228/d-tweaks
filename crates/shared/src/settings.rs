@@ -263,10 +263,19 @@ pub struct ChoiceDef {
 
 pub const CHOICES: &[ChoiceDef] = &[
     ChoiceDef {
+        id: UI_LANG_KEY,
+        group: "サイト全体",
+        label: "この拡張の表示言語",
+        description: "この拡張が出す文字の言語です。サイト本来の文字は変わりません。「自動」はブラウザの言語に合わせます。",
+        options: &[("auto", "opt.auto"), ("ja", "opt.ja"), ("en", "opt.en")],
+        default: "auto",
+    },
+    ChoiceDef {
         id: DANMAKU_FPS_KEY,
         group: "コメント",
         label: "弾幕の描画レート",
         description: "上げるほど滑らかに流れますが、そのぶん CPU を使います。コマ数の表示は映像基準の 24fps 固定です。",
+        // A number with a unit reads the same in both languages
         options: &[
             ("24", "24 fps"),
             ("30", "30 fps"),
@@ -281,10 +290,10 @@ pub const CHOICES: &[ChoiceDef] = &[
         label: "弾幕が流れきる時間",
         description: "コメントが画面を横切るのにかける秒数です。長くすると読みやすくなり、そのぶん同時に出る本数が増えます。",
         options: &[
-            ("3", "3 秒（速い）"),
-            ("4", "4 秒"),
-            ("6", "6 秒"),
-            ("8", "8 秒（ゆっくり）"),
+            ("3", "opt.sec.fast"),
+            ("4", "opt.sec.4"),
+            ("6", "opt.sec.6"),
+            ("8", "opt.sec.slow"),
         ],
         default: "4",
     },
@@ -295,12 +304,12 @@ pub const CHOICES: &[ChoiceDef] = &[
         description: "フロート検索を開いたときの並び順です。開いた後はその場でも変えられます。",
         // The same values as the search page of the site (#listsort)
         options: &[
-            ("4", "関連度順"),
-            ("1", "再生数順"),
-            ("7", "気になる登録数順"),
-            ("3", "リリース順"),
-            ("6", "製作年度順"),
-            ("2", "５０音順"),
+            ("4", "opt.sort.relevance"),
+            ("1", "opt.sort.plays"),
+            ("7", "opt.sort.favorites"),
+            ("3", "opt.sort.release"),
+            ("6", "opt.sort.year"),
+            ("2", "opt.sort.kana"),
         ],
         default: "4",
     },
@@ -310,11 +319,11 @@ pub const CHOICES: &[ChoiceDef] = &[
         label: "一覧カードの下限幅",
         description: "この幅を下回らない範囲で列数が決まります。狭くすると 1 画面に多く並び、広くすると 1 枚が大きくなります。",
         options: &[
-            ("auto", "画面に合わせる（既定）"),
-            ("180px", "180px（多く並べる）"),
-            ("220px", "220px"),
-            ("260px", "260px"),
-            ("320px", "320px（大きく見る）"),
+            ("auto", "opt.width.auto"),
+            ("180px", "opt.width.180"),
+            ("220px", "opt.width.220"),
+            ("260px", "opt.width.260"),
+            ("320px", "opt.width.320"),
         ],
         default: "auto",
     },
@@ -326,10 +335,7 @@ pub const CHOICES: &[ChoiceDef] = &[
         // The site also has 1280 and 1920, but they are not options here: they are 12.5
         // and 22 times the bytes of the default of the site, and a card is at most 320px
         // wide, so they look the same.
-        options: &[
-            ("1", "640×360（既定）"),
-            (THUMB_SIZE_OFF, "そのまま（通信量が最小）"),
-        ],
+        options: &[("1", "opt.thumb.640"), (THUMB_SIZE_OFF, "opt.thumb.off")],
         default: "1",
     },
 ];
@@ -353,6 +359,11 @@ pub const SEARCH_SORT_KEY: &str = "search-sort";
 pub const CARD_MIN_WIDTH_KEY: &str = "card-min-width";
 /// Size of a thumbnail.
 pub const THUMB_SIZE_KEY: &str = "thumb-size";
+/// Language of the own UI (`auto`, `ja`, `en`).
+///
+/// `chrome.i18n` cannot do this: it follows the browser and an extension cannot change it
+/// (see `text`). The name and the description of the extension stay with `_locales`.
+pub const UI_LANG_KEY: &str = "ui-lang";
 /// The value that keeps the image of the site.
 pub const THUMB_SIZE_OFF: &str = "off";
 
@@ -559,4 +570,167 @@ pub async fn is_enabled(feature_id: &str) -> bool {
         .find(|(f, _)| f.id == feature_id)
         .map(|(_, on)| on)
         .unwrap_or(true)
+}
+
+/// The English words of the tables, by id. A row that is absent stays Japanese.
+///
+/// The tables above are the one source of the settings, so this is a second column and not
+/// a second table: a new setting works without a line here, in Japanese.
+pub const EN: &[(&str, &str, &str)] = &[
+    (
+        ENABLED,
+        "Turn this extension on",
+        "With this off, every change stops and the site looks as it always does.",
+    ),
+    (
+        "list-grid",
+        "Draw the lists as a full-width grid",
+        "The lists of the my-page (continue, favorites, history, complete, all works) are two fixed columns in 860px. This makes one grid over the full width.",
+    ),
+    (
+        "episode-grid",
+        "Show every episode at once",
+        "The episode list of a work page moves 12 at a time. This puts every episode in one grid.",
+    ),
+    (
+        "no-promo",
+        "Do not show the pop-up advertisement",
+        "Closes the full-screen pop-up of the site (`dialog.popup-wrapper`). Only hiding it would leave the page unusable, so it is closed.",
+    ),
+    (
+        "top-page",
+        "Rebuild the top page",
+        "15 horizontal strips (4000 to 10000px wide) become one screen: a showcase, the episodes of today, the ranking, and one grid with chips.",
+    ),
+    (
+        "work-hero",
+        "Make the head of a work page full width",
+        "The key visual, the title and the controls become one full-width hero. The head goes from 563px to 320px, so the episodes come earlier.",
+    ),
+    (
+        "work-detail",
+        "Put the details in tables",
+        "The summary, the genres, the cast and the staff stop folding and become tables of role and person.",
+    ),
+    (
+        "infinite-scroll",
+        "Make the lists an infinite scroll",
+        "Hides the paging of the my-page lists and adds the next page while you scroll.",
+    ),
+    (
+        "player-modal",
+        "Play in a window on the same page",
+        "The play button opens a window over the list instead of leaving the page. Esc or a click on the background closes it.",
+    ),
+    (
+        "search-overlay",
+        "Make the search a float",
+        "The search of the header opens a float that does not leave the page, and the results arrive while you type (also with Cmd-K, Ctrl-K and /).",
+    ),
+    (
+        "comments",
+        "Show the comments of nicovideo",
+        "While the float player runs, the comments of the same episode come from the official channel on nicovideo. The match uses the work title and the episode number, so it can find nothing.",
+    ),
+    (
+        "debug-view",
+        "Show the debug view of the video",
+        "Puts the frame rate, the frame number, the size, the prefetch and the dropped frames over the bottom right of the float player.",
+    ),
+    (
+        SEARCH_NO_RENTAL,
+        "Leave the rentals out of the search",
+        "Only what the subscription has. The interface does the removal (`vodTypeList`), so the count is also the count without them.",
+    ),
+    (
+        TOP_NO_RENTAL,
+        "Leave the rentals out of the top page",
+        "Removes the rental works from the own top page. The list of the rentals (300 works) is read one time a day and matched by the work id.",
+    ),
+    (
+        PLAYER_SKIP,
+        "Show the button that skips to the main story",
+        "From the chapters of the playback data, a button appears at the bottom right of the video (the same rule as the player of the site). In the ending it becomes \"next episode\". The part before the opening is not skipped, and nothing skips by itself.",
+    ),
+    (
+        SEARCH_SHORTCUTS,
+        "Open the float search with the keyboard",
+        "Cmd-K (Ctrl-K) and / open the search. With this off, the link of the header still opens it.",
+    ),
+    (
+        UI_LANG_KEY,
+        "Language of this extension",
+        "The language of the words that this extension shows. The words of the site do not change. \"Auto\" follows the browser.",
+    ),
+    (
+        DANMAKU_FPS_KEY,
+        "Draw rate of the comments",
+        "Higher is smoother and uses more CPU. The frame counter stays at the 24fps of the video.",
+    ),
+    (
+        DANMAKU_DURATION_KEY,
+        "Time for a comment to cross",
+        "The seconds that one comment needs to cross the screen. Longer is easier to read and puts more comments on the screen at once.",
+    ),
+    (
+        SEARCH_SORT_KEY,
+        "Default order of the search",
+        "The order when the float search opens. It can also be changed while it is open.",
+    ),
+    (
+        CARD_MIN_WIDTH_KEY,
+        "Smallest width of a card",
+        "The number of columns keeps the cards over this width. Smaller puts more on one screen; larger makes one card bigger.",
+    ),
+    (
+        THUMB_SIZE_KEY,
+        "Resolution of the thumbnails",
+        "In a full-width grid the image of the site (288px) is stretched and looks soft, so the default takes the 640px version. Choose \"as it is\" to keep the traffic at its smallest.",
+    ),
+];
+
+/// The label and the description of a setting, in the language of the UI.
+pub fn words(
+    id: &str,
+    label: &'static str,
+    description: &'static str,
+) -> (&'static str, &'static str) {
+    if crate::text::current() == crate::text::Lang::Ja {
+        return (label, description);
+    }
+    EN.iter()
+        .find(|(key, _, _)| *key == id)
+        .map(|(_, label, description)| (*label, *description))
+        .unwrap_or((label, description))
+}
+
+/// The text of one value of a list, in the language of the UI.
+///
+/// A value that is a key (`opt.…`) is translated; a value that is already a word (`24 fps`)
+/// stays as it is, so a list of numbers needs no entry in the table.
+pub fn option_label(label: &'static str) -> &'static str {
+    if label.starts_with("opt.") {
+        crate::text::t(label)
+    } else {
+        label
+    }
+}
+
+/// The name of a group, in the language of the UI.
+pub fn group_label(group: &'static str) -> &'static str {
+    let key = format!("group.{group}");
+    let word = crate::text::t(&key);
+    if word == key { group } else { word }
+}
+
+/// The language of the UI, from the setting and the browser.
+pub async fn ui_lang() -> crate::text::Lang {
+    let setting = choice(UI_LANG_KEY).await;
+    // `navigator.language` through Reflect: this crate also runs in the service worker,
+    // where `window` does not exist, and web-sys is not a dependency here
+    let browser = js_sys::Reflect::get(&js_sys::global(), &JsValue::from_str("navigator"))
+        .ok()
+        .and_then(|navigator| js_sys::Reflect::get(&navigator, &JsValue::from_str("language")).ok())
+        .and_then(|value| value.as_string());
+    crate::text::resolve(&setting, browser.as_deref())
 }

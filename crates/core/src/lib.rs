@@ -321,6 +321,14 @@ fn install_all() -> Result<(), JsValue> {
     if INSTALLED.replace(true) {
         return Ok(());
     }
+
+    // The language of the own words. It is a setting and the setting is asynchronous, so
+    // it is read one time and kept (`shared::text`). Everything that a user can see is
+    // built after a click (the float player) or after a settings read, so the value is
+    // there in time; the default until then is Japanese.
+    wasm_bindgen_futures::spawn_local(async {
+        d_tweaks_shared::text::init(settings::ui_lang().await);
+    });
     let window = web_sys::window().ok_or_else(|| JsValue::from_str("no window"))?;
     let document = window
         .document()

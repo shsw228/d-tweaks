@@ -39,7 +39,7 @@ FRAMES = [
         "en": ("15 horizontal strips become one screen",
                "A showcase of the ranking, the episodes of today, and one grid with chips."),
     }),
-    ("shot5", "raw-05-settings.png", {
+    ("shot5", "raw-05-settings-{lang}.png", {
         "ja": ("11 の機能は、すべて個別に切れる",
                "設定は場所ごとに分けてある。全体スイッチ 1 つでサイト本来の表示に戻る。"),
         "en": ("Eleven features, each with its own switch",
@@ -57,6 +57,7 @@ BRAND = {
 
 
 def data_uri(name: str) -> str:
+    """The capture as a data URI. `{lang}` in the name is filled in by the caller."""
     path = SHOTS / name
     kind = "png" if path.suffix == ".png" else "jpeg"
     return f"data:image/{kind};base64," + base64.b64encode(path.read_bytes()).decode()
@@ -66,11 +67,11 @@ def main() -> None:
     cards = "\n".join(
         f'<section class="frame" data-frame="{fid}-{lang}">\n'
         f"  <div class=\"copy\"><h2>{words[lang][0]}</h2><p>{words[lang][1]}</p></div>\n"
-        f'  <div class="shot"><img src="{data_uri(shot)}" alt=""></div>\n'
+        f'  <div class="shot"><img src="{data_uri(shot.format(lang=lang))}" alt=""></div>\n'
         f"</section>"
         for fid, shot, words in FRAMES
-        if (SHOTS / shot).exists()
         for lang in words
+        if (SHOTS / shot.format(lang=lang)).exists()
     )
     # The tile and the marquee carry only words, so they are built here
     for lang, (sub_tile, sub_marquee) in BRAND.items():

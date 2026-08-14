@@ -23,6 +23,7 @@ use web_sys::{
 };
 
 use d_tweaks_shared::json;
+use d_tweaks_shared::text::t;
 
 use crate::features::{comments, frame, player_modal};
 use crate::{log, timestamp};
@@ -312,13 +313,13 @@ pub fn install(panel: &Element, bar: &Element, iframe: &HtmlIFrameElement) -> Re
     // Are the controls of the site hidden? A new episode needs the same state.
     let native_hidden_flag = Rc::new(Cell::new(true));
 
-    let prev = button(&document, "前話", "前の話へ")?;
-    let play = button(&document, "▶", "再生 / 一時停止")?;
-    let next = button(&document, "次話", "次の話へ")?;
-    let back30 = button(&document, "-30s", "30 秒戻る")?;
-    let back = button(&document, "-10s", "10 秒戻る")?;
-    let forward = button(&document, "+10s", "10 秒進む")?;
-    let forward30 = button(&document, "+30s", "30 秒進む")?;
+    let prev = button(&document, t("bar.prev"), t("bar.prev.title"))?;
+    let play = button(&document, "▶", t("bar.play.title"))?;
+    let next = button(&document, t("bar.next"), t("bar.next.title"))?;
+    let back30 = button(&document, "-30s", t("bar.back30.title"))?;
+    let back = button(&document, "-10s", t("bar.back10.title"))?;
+    let forward = button(&document, "+10s", t("bar.forward10.title"))?;
+    let forward30 = button(&document, "+30s", t("bar.forward30.title"))?;
 
     let time = document.create_element("span")?;
     time.set_class_name("dt-bar__time");
@@ -328,24 +329,16 @@ pub fn install(panel: &Element, bar: &Element, iframe: &HtmlIFrameElement) -> Re
     // the position of the bar itself.
     let seek_wrap = document.create_element("div")?;
     seek_wrap.set_class_name(SEEK_WRAP_CLASS);
-    let seek = slider(&document, "dt-bar__seek", SEEK_STEPS, "再生位置")?;
+    let seek = slider(&document, "dt-bar__seek", SEEK_STEPS, t("bar.seek.title"))?;
     let chapters = document.create_element("div")?;
     chapters.set_class_name("dt-bar__chapters");
-    let speed = button(&document, "1.0×", "再生速度を切り替える")?;
-    let mute = button(&document, "音", "ミュート")?;
-    let volume = slider(&document, "dt-bar__volume", 100.0, "音量")?;
-    let danmaku = button(&document, "弾幕", "コメントの表示を切り替える")?;
-    let list = button(&document, "一覧", "コメント一覧の開閉")?;
-    let native = button(
-        &document,
-        "サイトUI",
-        "サイト本来のコントロールを出す（画質などの設定はこちらから）",
-    )?;
-    let fullscreen = button(
-        &document,
-        "最大化",
-        "ブラウザいっぱいに広げる（Esc で戻る）",
-    )?;
+    let speed = button(&document, "1.0×", t("bar.speed.title"))?;
+    let mute = button(&document, t("bar.mute"), t("bar.mute.title"))?;
+    let volume = slider(&document, "dt-bar__volume", 100.0, t("bar.volume.title"))?;
+    let danmaku = button(&document, t("bar.danmaku"), t("bar.danmaku.title"))?;
+    let list = button(&document, t("bar.list"), t("bar.list.title"))?;
+    let native = button(&document, t("bar.native"), t("bar.native.title"))?;
+    let fullscreen = button(&document, t("bar.fullscreen"), t("bar.fullscreen.title"))?;
     // Both start in the off state
     set_off(&native, true);
     set_off(&fullscreen, true);

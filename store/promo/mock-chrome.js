@@ -19,7 +19,13 @@ window.chrome = {
     // The UI asks with the defaults as the argument and takes what comes back
     // MV3 gives a promise back, and that is the form the WASM awaits
     sync: {
-      get: (defaults) => Promise.resolve(defaults || {}),
+      // `?lang=` forces the language of the UI, so both listings get their own picture
+      get: (defaults) => {
+        const want = new URLSearchParams(location.search).get("lang");
+        return Promise.resolve(
+          want ? { ...(defaults || {}), "ui-lang": want } : defaults || {},
+        );
+      },
       set: () => Promise.resolve(),
     },
     local: {
