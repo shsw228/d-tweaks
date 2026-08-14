@@ -7,3 +7,4 @@ pub mod json;
 pub mod messages;
 pub mod nicovideo;
 pub mod settings;
+pub mod text;

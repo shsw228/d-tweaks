@@ -27,6 +27,8 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use web_sys::{Document, Element, HtmlAnchorElement, MutationObserver, MutationObserverInit};
 
+use d_tweaks_shared::text::t;
+
 use crate::dom::{element, text_of};
 use crate::log;
 
@@ -155,13 +157,18 @@ pub fn render() -> Result<bool, JsValue> {
         let button = action_button(
             &document,
             "dt-action dt-action--mylist",
-            "マイリスト",
+            t("work.mylist"),
             &site,
         )?;
         actions.append_child(&button)?;
     }
     if let Some(site) = header.query_selector(".actionArea .btnConcerned")? {
-        let button = action_button(&document, "dt-action dt-action--favo", "気になる", &site)?;
+        let button = action_button(
+            &document,
+            "dt-action dt-action--favo",
+            t("work.favorite"),
+            &site,
+        )?;
         watch_favorite_state(&button, &site)?;
         actions.append_child(&button)?;
     }

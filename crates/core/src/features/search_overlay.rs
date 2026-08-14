@@ -55,6 +55,8 @@ use web_sys::{
 
 use d_tweaks_shared::{json, settings};
 
+use d_tweaks_shared::text::{t, t_fill};
+
 use crate::dom::{document, element};
 use crate::features::card_view::{self, Badge, Card};
 use crate::log;
@@ -97,17 +99,20 @@ const DEBOUNCE_MS: i32 = 400;
 const MIN_QUERY_CHARS: usize = 2;
 /// Replies to keep, so that a correction of the words asks nothing.
 const CACHE_LIMIT: usize = 64;
-const INITIAL_HINT: &str = "作品名を入れると、打ちながら結果が出ます";
+/// The first line of the float, before anything is typed.
+fn initial_hint() -> &'static str {
+    t("search.hint")
+}
 
 /// Sort values. The same as `#listsort` of the search page (all measured).
 /// The default of the site is by relevance. `5` is absent on the site also.
 const SORTS: &[(&str, &str)] = &[
-    ("4", "関連度順"),
-    ("1", "再生数順"),
-    ("7", "気になる登録数順"),
-    ("3", "リリース順"),
-    ("6", "製作年度順"),
-    ("2", "５０音順"),
+    ("4", "opt.sort.relevance"),
+    ("1", "opt.sort.plays"),
+    ("7", "opt.sort.favorites"),
+    ("3", "opt.sort.release"),
+    ("6", "opt.sort.year"),
+    ("2", "opt.sort.kana"),
 ];
 const SORT_DEFAULT: &str = "4";
 
@@ -307,12 +312,12 @@ fn card_of(entry: &JsValue) -> Option<Card> {
                 }),
                 Some("favorite") => badges.push(Badge {
                     modifier: None,
-                    text: "気になる".into(),
+                    text: t("badge.favorite").into(),
                 }),
                 // This means "one episode or more", so not "seen"
                 Some("viewed") => badges.push(Badge {
                     modifier: None,
-                    text: "視聴中".into(),
+                    text: t("badge.watching").into(),
                 }),
                 _ => {}
             }
@@ -331,7 +336,7 @@ fn card_of(entry: &JsValue) -> Option<Card> {
     if json::get_string(&info, "vodType").as_deref() == Some("tvod") {
         badges.push(Badge {
             modifier: None,
-            text: "レンタル".into(),
+            text: t("badge.rental").into(),
         });
     }
 
@@ -493,14 +498,26 @@ fn refresh_counts(root: &Element) {
     if total == 0 {
         set_status(root, "");
     } else if loaded >= total {
-        set_status(root, &format!("{total} 件"));
+        set_status(
+            root,
+            &t_fill("search.count", &[("total", &total.to_string())]),
+        );
     } else {
-        set_status(root, &format!("{total} 件中 {loaded} 件"));
+        set_status(
+            root,
+            &t_fill(
+                "search.count.loaded",
+                &[
+                    ("total", &total.to_string()),
+                    ("loaded", &loaded.to_string()),
+                ],
+            ),
+        );
     }
 
     if loaded > 0 && loaded >= total {
         // Say that everything is on screen; do not stay silent
-        set_footer(root, "すべて表示しました");
+        set_footer(root, t("scroll.all"));
     } else {
         set_footer(root, "");
     }
@@ -534,16 +551,16 @@ async fn start_search(query: Query) {
         set_message(
             &root,
             Some(if query.word.is_empty() {
-                INITIAL_HINT
+                initial_hint()
             } else {
-                "もう少し入れてください（2 文字から）"
+                t("search.short")
             }),
         );
         return;
     }
 
     let _ = root.class_list().add_1("dt-search--loading");
-    set_status(&root, "検索中…");
+    set_status(&root, t("search.running"));
     let result = fetch_page(&query, 0, PAGE_SIZE).await;
 
     // A newer search runs, so this reply is old
@@ -559,15 +576,15 @@ async fn start_search(query: Query) {
         Ok((total, cards)) => {
             if cards.is_empty() {
                 let hint = if query.vod_types == VOD_SVOD {
-                    "（レンタルを除いています）"
+                    t("search.rental_hint")
                 } else {
                     ""
                 };
                 set_message(
                     &root,
-                    Some(&format!(
-                        "「{}」に一致する作品はありません{hint}",
-                        query.word
+                    Some(&t_fill(
+                        "search.empty",
+                        &[("word", &query.word), ("hint", hint)],
                     )),
                 );
                 update_progress(|p| p.total = 0);
@@ -589,7 +606,7 @@ async fn start_search(query: Query) {
         Err(err) => {
             log(&format!("検索に失敗: {err:?}"));
             set_status(&root, "");
-            set_message(&root, Some("検索できませんでした"));
+            set_message(&root, Some(t("search.failed")));
         }
     }
 }
@@ -644,7 +661,7 @@ async fn load_next() {
     };
 
     update_progress(|p| p.loading = true);
-    set_footer(&root, "読み込み中…");
+    set_footer(&root, t("search.more"));
     let ok = load_page(&root, current.loaded, current.generation).await;
     update_progress(|p| p.loading = false);
     if ok {
@@ -698,7 +715,7 @@ async fn load_page(root: &Element, start: u32, generation: u32) -> bool {
         }
         Err(err) => {
             log(&format!("続きの取得に失敗: {err:?}"));
-            set_footer(&root, "続きを読み込めませんでした");
+            set_footer(&root, t("search.more.failed"));
             false
         }
     }
@@ -771,7 +788,7 @@ fn build(document: &Document) -> Result<Element, JsValue> {
     let root = element(document, "div", OVERLAY_CLASS)?;
     root.set_attribute("role", "dialog")?;
     root.set_attribute("aria-modal", "true")?;
-    root.set_attribute("aria-label", "作品を検索")?;
+    root.set_attribute("aria-label", t("search.label"))?;
 
     let backdrop = element(document, "div", "dt-search__backdrop")?;
     root.append_child(&backdrop)?;
@@ -782,13 +799,13 @@ fn build(document: &Document) -> Result<Element, JsValue> {
     let bar = element(document, "div", "dt-search__bar")?;
     let input: HtmlInputElement = element(document, "input", "dt-search__input")?.dyn_into()?;
     input.set_type("search");
-    input.set_placeholder("作品名で検索");
+    input.set_placeholder(t("search.placeholder"));
     input.set_autocomplete("off");
     input.set_spellcheck(false);
     bar.append_child(&input)?;
 
     let sort: HtmlSelectElement = element(document, "select", "dt-search__sort")?.dyn_into()?;
-    sort.set_attribute("aria-label", "並び替え")?;
+    sort.set_attribute("aria-label", t("search.sort.label"))?;
     // The sort comes from the setting (`search-sort`). Only the first build has
     // no stored value; the code below replaces it when the setting arrives.
     let initial_sort = SORT_INITIAL
@@ -797,7 +814,7 @@ fn build(document: &Document) -> Result<Element, JsValue> {
     for (value, label) in SORTS {
         let option = document.create_element("option")?;
         option.set_attribute("value", value)?;
-        option.set_text_content(Some(label));
+        option.set_text_content(Some(d_tweaks_shared::settings::option_label(label)));
         if *value == initial_sort {
             option.set_attribute("selected", "")?;
         }
@@ -813,7 +830,7 @@ fn build(document: &Document) -> Result<Element, JsValue> {
     rental.set_checked(NO_RENTAL.get().unwrap_or(NO_RENTAL_DEFAULT));
     filter.append_child(&rental)?;
     let filter_text = document.create_element("span")?;
-    filter_text.set_text_content(Some("レンタルを除く"));
+    filter_text.set_text_content(Some(t("search.no_rental")));
     filter.append_child(&filter_text)?;
     bar.append_child(&filter)?;
 
@@ -827,7 +844,7 @@ fn build(document: &Document) -> Result<Element, JsValue> {
     body_area.append_child(&grid)?;
     // Message while there are no results. The panel keeps its height.
     let empty = element(document, "p", "dt-search__empty")?;
-    empty.set_text_content(Some(INITIAL_HINT));
+    empty.set_text_content(Some(initial_hint()));
     body_area.append_child(&empty)?;
     // Sentinel of the prefetch. Also shows the state.
     let footer = element(document, "p", "dt-search__footer")?;

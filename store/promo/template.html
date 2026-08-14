@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>d-tweaks store assets</title>
+<style>
+  /* One file for every store image. `?frame=` decides which one is drawn. */
+  * { margin: 0; box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+    background: #0b0d10; color: #fff; overflow: hidden;
+  }
+  .frame { display: none; width: 100vw; height: 100vh; }
+  .frame.on { display: flex; }
+  /* A screenshot: the words on top, the picture below, one accent line between */
+  .frame[data-frame^="shot"] {
+    flex-direction: column; padding: 44px 56px 0;
+    background: radial-gradient(120% 90% at 12% 0%, #1d2b3a 0%, #0b0d10 60%);
+  }
+  .copy h2 { font-size: 34px; letter-spacing: -0.01em; line-height: 1.25; }
+  .copy p { margin-top: 10px; color: #9fb0c0; font-size: 15px; line-height: 1.6; }
+  .shot {
+    flex: 1; margin-top: 26px; border-radius: 10px 10px 0 0; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.14); border-bottom: none;
+    box-shadow: 0 -2px 60px rgba(0,0,0,0.6);
+  }
+  .shot img { width: 100%; display: block; }
+  /* The small tile and the marquee: name, one line, no screenshot */
+  .frame[data-frame^="tile"], .frame[data-frame^="marquee"] {
+    flex-direction: column; align-items: flex-start; justify-content: center;
+    padding: 0 34px; background: linear-gradient(135deg, #17202b 0%, #0b0d10 70%);
+  }
+  .frame[data-frame^="marquee"] { padding: 0 90px; }
+  .name { font-size: 44px; font-weight: 700; letter-spacing: -0.02em; }
+  .frame[data-frame^="marquee"] .name { font-size: 84px; }
+  .sub { margin-top: 8px; color: #9fb0c0; font-size: 15px; }
+  .frame[data-frame^="marquee"] .sub { font-size: 26px; margin-top: 16px; }
+  .rule { width: 64px; height: 4px; margin: 18px 0 0; border-radius: 2px; background: #eb5528; }
+</style></head><body>
+<!--FRAMES-->
+<script>
+  // No inline data: the frame comes from the query, so one file bakes every size.
+  const want = new URLSearchParams(location.search).get("frame") || "shot1";
+  const el = document.querySelector(`.frame[data-frame="${want}"]`);
+  if (el) el.classList.add("on");
+</script>
+</body></html>

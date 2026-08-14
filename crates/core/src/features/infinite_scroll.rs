@@ -32,6 +32,8 @@ use web_sys::{
     Window,
 };
 
+use d_tweaks_shared::text::{t, t_fill};
+
 use crate::{LIST_SELECTOR, log};
 
 /// The cards of the HTML of the next page.
@@ -236,7 +238,10 @@ pub fn install() -> Result<bool, JsValue> {
         finished: false,
     }));
 
-    status.set_text_content(Some(&format!("全 {total} ページ / 1 ページ目まで表示")));
+    status.set_text_content(Some(&t_fill(
+        "scroll.first",
+        &[("total", &total.to_string())],
+    )));
 
     let observer_slot: Rc<RefCell<Option<IntersectionObserver>>> = Rc::new(RefCell::new(None));
 
@@ -269,7 +274,10 @@ pub fn install() -> Result<bool, JsValue> {
                 s.next_page
             };
 
-            status.set_text_content(Some(&format!("{page} ページ目を読み込み中…")));
+            status.set_text_content(Some(&t_fill(
+                "scroll.loading",
+                &[("page", &page.to_string())],
+            )));
 
             spawn_local({
                 let state = state.clone();
@@ -291,14 +299,17 @@ pub fn install() -> Result<bool, JsValue> {
                             s.next_page = page + 1;
                             if added == 0 || s.next_page > s.total_pages {
                                 s.finished = true;
-                                status.set_text_content(Some("すべて表示しました"));
+                                status.set_text_content(Some(t("scroll.all")));
                                 if let Some(observer) = observer_slot.borrow().as_ref() {
                                     observer.disconnect();
                                 }
                             } else {
-                                status.set_text_content(Some(&format!(
-                                    "{page} / {} ページまで表示",
-                                    s.total_pages
+                                status.set_text_content(Some(&t_fill(
+                                    "scroll.progress",
+                                    &[
+                                        ("page", &page.to_string()),
+                                        ("total", &s.total_pages.to_string()),
+                                    ],
                                 )));
                                 // `IntersectionObserver` reports only a change. If the
                                 // sentinel stays inside the rootMargin after one page,
@@ -314,9 +325,7 @@ pub fn install() -> Result<bool, JsValue> {
                             // On a failure, stop and give the paging of the site back
                             s.finished = true;
                             log(&format!("page {page} の取得に失敗: {err:?}"));
-                            status.set_text_content(Some(
-                                "自動読み込みに失敗しました。ページ送りを使ってください。",
-                            ));
+                            status.set_text_content(Some(t("scroll.failed")));
                             if let Some(observer) = observer_slot.borrow().as_ref() {
                                 observer.disconnect();
                             }

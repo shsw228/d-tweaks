@@ -1,0 +1,14 @@
+{
+  "appName": {
+    "message": "d-tweaks",
+    "description": "拡張の名前。ストアの掲載名にもなる。"
+  },
+  "appDesc": {
+    "message": "[Unofficial] Rebuilds the PC web of dアニメストア: full-width grids, every episode at once, and playback on the same page.",
+    "description": "ストアの説明と拡張機能ページの説明。132 文字まで。"
+  },
+  "actionTitle": {
+    "message": "d-tweaks settings",
+    "description": "ツールバーのアイコンに出る文字。"
+  }
+}

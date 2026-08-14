@@ -63,10 +63,21 @@ use web_sys::{Document, Element, HtmlIFrameElement, MouseEvent};
 
 use d_tweaks_shared::{json, settings};
 
+use d_tweaks_shared::text::t;
+
 use crate::dom::element;
 use crate::features::comments::{self, Target, episode_label};
 use crate::features::{controls, frame};
 use crate::{log, sleep, timestamp};
+
+/// The two labels of the skip button. They are read at every call, so a change of the
+/// language setting reaches the next episode without a reload.
+fn skip_label() -> &'static str {
+    t("meta.skip")
+}
+fn next_label() -> &'static str {
+    t("meta.next")
+}
 
 /// Interval for the URL of the iframe and the play position. Same as `comments`.
 const WATCH_INTERVAL_MS: i32 = 500;
@@ -142,9 +153,9 @@ fn skip_at(plan: &Plan, current: f64) -> Option<(&'static str, Action)> {
         .find(|c| c.kind != "none")
         .map(|c| c.start);
     match target {
-        Some(to) => Some(("本編へスキップ ▶︎", Action::Seek(to))),
+        Some(to) => Some((skip_label(), Action::Seek(to))),
         // Nothing after this chapter means the ending
-        None if plan.has_next => Some(("次の話へ ▶︎", Action::Next)),
+        None if plan.has_next => Some((next_label(), Action::Next)),
         None => None,
     }
 }
@@ -244,7 +255,7 @@ fn meta_items(data: &JsValue) -> Vec<MetaItem> {
     }
     if let Some((start, end)) = main_story_range(data, duration) {
         items.push(MetaItem {
-            label: Some("本編"),
+            label: Some(t("meta.main")),
             value: format!("{}〜{}", timestamp(start), timestamp(end)),
             modifier: None,
         });
@@ -254,7 +265,7 @@ fn meta_items(data: &JsValue) -> Vec<MetaItem> {
         let near_end = duration.is_some_and(|total| resume >= total - 5.0);
         if resume >= 5.0 && !near_end {
             items.push(MetaItem {
-                label: Some("前回"),
+                label: Some(t("meta.resume")),
                 value: timestamp(resume),
                 modifier: Some("is-resume"),
             });
@@ -263,7 +274,7 @@ fn meta_items(data: &JsValue) -> Vec<MetaItem> {
     if json::get(data, "nextTitle").is_none() {
         items.push(MetaItem {
             label: None,
-            value: "最新話".to_string(),
+            value: t("meta.latest").to_string(),
             modifier: Some("is-latest"),
         });
     }
@@ -465,7 +476,9 @@ fn install_skip_click(skip: &Element, frame: &HtmlIFrameElement) -> Result<(), J
 
 #[cfg(test)]
 mod tests {
-    use super::{Action, Chapter, MIN_TIME_TO_SKIP_DEFAULT, Plan, skip_at, work_url};
+    use super::{
+        Action, Chapter, MIN_TIME_TO_SKIP_DEFAULT, Plan, next_label, skip_at, skip_label, work_url,
+    };
     use crate::features::comments::episode_label;
 
     /// Chapters for a test. `showInterface` is true and the limit is 15 seconds.
@@ -498,12 +511,12 @@ mod tests {
         );
         assert_eq!(
             skip_at(&plan, 10.0),
-            Some(("本編へスキップ ▶︎", Action::Seek(99.0)))
+            Some((skip_label(), Action::Seek(99.0)))
         );
         // No button inside the main story
         assert_eq!(skip_at(&plan, 200.0), None);
         // The ending goes to the next episode
-        assert_eq!(skip_at(&plan, 1040.0), Some(("次の話へ ▶︎", Action::Next)));
+        assert_eq!(skip_at(&plan, 1040.0), Some((next_label(), Action::Next)));
         // No next episode, so no button
         let last = planned(
             &[
@@ -533,7 +546,7 @@ mod tests {
         // Only the `none` after it (the opening) gives a button
         assert_eq!(
             skip_at(&plan, 200.0),
-            Some(("本編へスキップ ▶︎", Action::Seek(285.0)))
+            Some((skip_label(), Action::Seek(285.0)))
         );
     }
 

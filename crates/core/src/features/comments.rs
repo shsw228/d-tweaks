@@ -47,6 +47,8 @@ use web_sys::{Document, Element, HtmlIFrameElement, HtmlInputElement, KeyboardEv
 use d_tweaks_shared::messages::{CommentQuery, CommentReply, parse_reply};
 use d_tweaks_shared::{chrome, json, nicovideo, settings};
 
+use d_tweaks_shared::text::{t, t_fill};
+
 use crate::dom::attr;
 use crate::features::{danmaku, frame};
 use crate::{log, sleep};
@@ -243,7 +245,7 @@ pub fn attach(
 
     let status = document.create_element("div")?;
     status.set_class_name("dt-comments");
-    status.set_text_content(Some("コメントを検索中…"));
+    status.set_text_content(Some(t("comments.searching")));
     side.append_child(&status)?;
 
     let stage = stage.clone();
@@ -251,7 +253,7 @@ pub fn attach(
     let frame = frame.clone();
     spawn_local(async move {
         if !settings::is_enabled("comments").await {
-            status.set_text_content(Some("コメント: 設定で無効"));
+            status.set_text_content(Some(t("comments.off")));
             return;
         }
 
@@ -260,7 +262,7 @@ pub fn attach(
             Ok(row) => row,
             Err(err) => {
                 log(&format!("動画指定の行を作れませんでした: {err:?}"));
-                status.set_text_content(Some("コメント: 準備に失敗しました"));
+                status.set_text_content(Some(t("comments.setup_failed")));
                 return;
             }
         };
@@ -330,25 +332,25 @@ fn build_pin_row(document: &Document, side: &Element) -> Result<(PinRow, Element
     let input: HtmlInputElement = document.create_element("input")?.dyn_into()?;
     input.set_class_name("dt-pin__input");
     input.set_type("text");
-    input.set_placeholder("動画の URL");
+    input.set_placeholder(t("pin.placeholder"));
     input.set_autocomplete("off");
     input.set_spellcheck(false);
-    input.set_title("この話に使うニコニコ動画を指定します");
+    input.set_title(t("pin.title"));
     root.append_child(&input)?;
 
     let load = document.create_element("button")?;
     load.set_class_name("dt-pin__button");
     load.set_attribute("type", "button")?;
-    load.set_text_content(Some("読込"));
+    load.set_text_content(Some(t("pin.load")));
     root.append_child(&load)?;
 
     // Only for an episode that has a video from the user
     let reset = document.create_element("button")?;
     reset.set_class_name("dt-pin__button dt-pin__reset");
     reset.set_attribute("type", "button")?;
-    reset.set_attribute("title", "指定をやめて自動で探し直す")?;
+    reset.set_attribute("title", t("pin.auto.title"))?;
     reset.set_attribute("hidden", "")?;
-    reset.set_text_content(Some("自動"));
+    reset.set_text_content(Some(t("pin.auto")));
     root.append_child(&reset)?;
 
     side.append_child(&root)?;
@@ -408,9 +410,7 @@ fn install_pin_handlers(ctx: &Ctx, load_button: &Element) -> Result<(), JsValue>
 fn submit_pin(ctx: &Ctx) {
     let Some(video_id) = nicovideo::video_id_from(&ctx.pin.input.value()) else {
         // `run` would write over this text, so it does not run
-        ctx.status.set_text_content(Some(
-            "動画の URL を読み取れません（例: https://www.nicovideo.jp/watch/so46649112）",
-        ));
+        ctx.status.set_text_content(Some(t("pin.bad_url")));
         return;
     };
     let ctx = ctx.clone();
@@ -437,8 +437,8 @@ async fn run(ctx: &Ctx, part_id: String, request: Request) {
         state.generation
     };
     ctx.status.set_text_content(Some(match &request {
-        Request::Pin(_) => "指定された動画を読み込み中…",
-        _ => "コメントを検索中…",
+        Request::Pin(_) => t("comments.loading"),
+        _ => t("comments.searching"),
     }));
 
     let (text, handle, pinned) = load(ctx, &part_id, &request).await;
@@ -489,11 +489,7 @@ async fn load(
 
     let Some(work_title) = work_title else {
         log("コメント: 作品名が取れないので引きません");
-        return (
-            "コメント: 作品名が取れませんでした".to_string(),
-            None,
-            false,
-        );
+        return (t("comments.no_work").to_string(), None, false);
     };
 
     let (pin_video_id, unpin) = match request {
@@ -514,7 +510,7 @@ async fn load(
         Ok(message) => message,
         Err(err) => {
             log(&format!("コメント依頼の組み立てに失敗: {err:?}"));
-            return ("コメントを取得できませんでした".to_string(), None, false);
+            return (t("comments.failed").to_string(), None, false);
         }
     };
     log(&format!(
@@ -557,9 +553,18 @@ async fn load(
                 };
                 let label = episode_label.as_deref().unwrap_or("");
                 // The address that the user gave is shown, so a wrong one is visible
-                let mark = if pinned { "／指定" } else { "" };
+                let mark = if pinned { t("pin.mark") } else { "" };
                 (
-                    format!("{work_title} {label}／コメント {count} 件（{video_id}{mark}）"),
+                    t_fill(
+                        "comments.count",
+                        &[
+                            ("work", &work_title),
+                            ("label", label),
+                            ("count", &count.to_string()),
+                            ("video", &video_id),
+                            ("mark", mark),
+                        ],
+                    ),
                     handle,
                     pinned,
                 )
@@ -567,8 +572,7 @@ async fn load(
             CommentReply::NotFound => {
                 log("コメント: ニコニコに該当する公式動画がありません");
                 (
-                    "ニコニコに該当する公式配信が見つかりません。動画の URL を入れると、その動画のコメントを出します。"
-                        .to_string(),
+                    t("comments.not_found").to_string(),
                     without_comments(ctx).await,
                     false,
                 )
@@ -576,7 +580,7 @@ async fn load(
             CommentReply::Error(message) => {
                 log(&format!("コメント取得に失敗: {message}"));
                 (
-                    format!("コメントを取得できません: {message}"),
+                    t_fill("comments.error", &[("message", &message)]),
                     without_comments(ctx).await,
                     false,
                 )
@@ -586,7 +590,7 @@ async fn load(
         Err(err) => {
             log(&format!("コメント依頼を送れませんでした: {err:?}"));
             (
-                "コメントを取得できません（拡張の再読み込みが必要かもしれません）".to_string(),
+                t("comments.no_reply").to_string(),
                 without_comments(ctx).await,
                 false,
             )
@@ -607,7 +611,7 @@ async fn without_comments(ctx: &Ctx) -> Option<danmaku::Handle> {
     }
     let options = danmaku::Options {
         video_id: "",
-        video_title: "コメントなし",
+        video_title: t("comments.none"),
         video_seconds: None,
         draw_fps: settings::danmaku_fps().await,
         duration: settings::danmaku_duration().await,
