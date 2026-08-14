@@ -1,0 +1,45 @@
+An unofficial extension that rebuilds the PC web of dアニメストア, a Japanese anime streaming service.
+
+The lists become grids over the full width, every episode of a work is on one screen, and an episode plays in a window over the list instead of a navigation. Each of the eleven features has its own switch, and one main switch gives the original site back.
+
+WHAT IT CHANGES
+
+- Lists (continue watching, favorites, history, complete, all works)
+  Two fixed columns in 860px become a grid over the full width. The paging becomes an infinite scroll, and what you watched, and how far, is on the card.
+
+- Top page
+  15 horizontal strips (4000 to 10000px wide each) become one screen: a showcase of the ranking, the episodes of today, the ranking with numbers, and one grid with chips. 4700px of height become 1372px.
+
+- Work page
+  The head becomes a full-width hero and goes from 563px to 320px. The episodes stop moving 12 at a time and become a grid of every episode. The summary, the genres, the cast and the staff stop folding and become tables.
+
+- Search
+  The search of the header opens a float that does not leave the page, and results arrive while you type. Cmd-K (Ctrl-K) and / open it too. The rentals can be left out, so only what the subscription has is shown.
+
+- Playback
+  The play button opens a window over the list instead of leaving the page. The control bar is outside of the video, so it hides nothing: previous and next episode, steps of 10 and 30 seconds, play rate, volume, and a large size. From the chapters of the playback data a "skip to the main story" button appears, and the chapters are drawn as a strip under the seek bar. Esc or a click on the background closes it.
+
+- Comments
+  While an episode plays, the comments of the same episode come from the official channel on nicovideo, over the video and in a list on the right. Their density is a histogram under the seek bar, so the loud parts are visible. A video is accepted only when the work title, the season, the episode number and the length all agree; when it is not certain, nothing is shown, so the comments of another episode never appear. For an episode that the search cannot find, the address of a video can be given by hand.
+
+SETTINGS
+
+The toolbar icon opens a popup, and the same rows are on the options page: a switch per feature, the draw rate and the duration of the comments, the smallest width of a card, the resolution of the thumbnails, the default order of the search, and the language of this extension (Japanese or English). A change is saved at once.
+
+PLEASE NOTE
+
+- This is a personal project. It has no relation to NTT DOCOMO, INC. or to nicovideo, and neither of them endorses it.
+- It reads the HTML and the CSS of the site to rebuild the display, so a change of the site can break it.
+- It has no feature that downloads or redistributes a video, and it never reads the DRM data of the playback interface.
+- It works on the PC web (animestore.docomo.ne.jp). The book pages (/book/) and the goods pages (/ec/) are out of scope.
+- A subscription to the service is required to watch. This extension gives no access to any content.
+
+PRIVACY
+
+Nothing that identifies a user is collected and nothing is sent anywhere. There is no analytics and no advertising. The settings and the cached comments stay inside your browser.
+https://github.com/shsw228/d-tweaks/blob/main/PRIVACY.md
+
+SOURCE CODE
+
+The logic is Rust compiled to WebAssembly. The source and the build command are public.
+https://github.com/shsw228/d-tweaks
