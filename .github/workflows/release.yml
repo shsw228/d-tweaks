@@ -80,3 +80,55 @@ jobs:
           else
             gh release create "${VERSION}" dist/*.zip --title "${VERSION}" --notes-file release-notes.md
           fi
+      # --- The store, upload only ---
+      #
+      # The API can also publish, and this does not do it: the listing (screenshots,
+      # category, the privacy answers) is not in the API, so a human looks at the draft in
+      # the dashboard and presses the button there.
+      #
+      # Without the secrets this step does nothing, so a fork and a checkout without them
+      # still release to GitHub.
+      - name: Upload to the Chrome Web Store
+        if: steps.check.outputs.todo == 'true' && env.EXTENSION_ID != ''
+        env:
+          EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          VERSION: ${{ steps.check.outputs.version }}
+        run: |
+          set -euo pipefail
+          # `jq` and not python: a heredoc inside this block would carry the indentation of
+          # the YAML into the code.
+          #
+          # The refresh token lives on; an access token is for this run only.
+          token=$(curl -sS -X POST https://oauth2.googleapis.com/token \
+            -d "client_id=${CLIENT_ID}" \
+            -d "client_secret=${CLIENT_SECRET}" \
+            -d "refresh_token=${REFRESH_TOKEN}" \
+            -d "grant_type=refresh_token" | jq -r '.access_token // empty')
+          if [ -z "${token}" ]; then
+            echo "::error::アクセストークンが取れません（Secrets を確認してください）"
+            exit 1
+          fi
+
+          reply=$(curl -sS -X PUT \
+            -H "Authorization: Bearer ${token}" \
+            -H "x-goog-api-version: 2" \
+            -T "dist/d-tweaks-${VERSION}.zip" \
+            "https://www.googleapis.com/upload/chromewebstore/v1.1/items/${EXTENSION_ID}?uploadType=media")
+          echo "${reply}" | jq .
+
+          # SUCCESS and IN_PROGRESS are both fine; a FAILURE names the reason
+          state=$(echo "${reply}" | jq -r '.uploadState // empty')
+          if [ "${state}" = "FAILURE" ]; then
+            echo "${reply}" | jq -r '.itemError[]? | "::error::\(.error_detail)"'
+            exit 1
+          fi
+          echo "uploadState = ${state}"
+
+          {
+            echo "### ストアに下書きを上げました（${VERSION}）"
+            echo
+            echo "公開はダッシュボードのボタンです。掲載情報を見てから出してください。"
+          } >> "${GITHUB_STEP_SUMMARY}"

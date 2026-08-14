@@ -46,7 +46,33 @@ is obfuscated and no code is loaded from the network. Give this with the submiss
 Read [PRIVACY.md](../PRIVACY.md). Nothing is collected, nothing is sent, and the DRM
 fields of the playback interface are never read.
 
+## The upload runs in the workflow
+
+`release.yml` sends the archive to the store after it made the tag and the GitHub release.
+It **does not publish**: the listing (screenshots, category, the answers about the data) is
+not in the API, so a human looks at the draft in the dashboard and presses the button.
+
+Four secrets turn the step on. Without them the step does nothing, so a checkout without
+them still releases to GitHub:
+
+| Secret | Where it comes from |
+|---|---|
+| `CWS_EXTENSION_ID` | The 32 letters in the address of the item in the dashboard |
+| `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET` | An OAuth client of the type "Desktop app" in a Cloud project with the Chrome Web Store API on |
+| `CWS_REFRESH_TOKEN` | `scripts/cws-refresh-token.py <the json of the client> --set-secrets` |
+
+Two settings decide whether this works at all:
+
+- The consent screen must be **In production**. In "Testing" a refresh token dies after
+  seven days, and an account that is not a test user gets `access_denied`.
+- The account must be the one that owns the item in the store. Another account can get a
+  token and still not be allowed to upload.
+
+The first upload is by hand: the item does not exist yet, and the listing has to be filled
+in once. After that every release goes through the workflow.
+
 ## Still by hand
 
-- Screenshots, 1280x800
-- The icons must not come from the logo of the service or of NTT DOCOMO
+- The listing: the screenshots and the promo images of `store/assets/<language>`, the
+  category, and the answers about the data (read PRIVACY.md)
+- The button that sends a draft to the review
