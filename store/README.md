@@ -6,6 +6,7 @@ Everything that the listing needs, and how it is made.
 |---|---|
 | `screenshots/` | The captures of the real pages (`raw-*.jpg`), as they came out of the browser |
 | `promo/` | `promo.html` (one file for every image) and `build.sh` |
+| `listing/` | The words of the listing: the description in both languages and the answers of the submission form, ready to paste |
 | `assets/ja`, `assets/en` | What goes to the store, one set per language. Made by `build.sh`; do not edit by hand |
 
 ```sh

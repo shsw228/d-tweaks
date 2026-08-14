@@ -5,13 +5,30 @@ name: build
 # The WASM in the archive is not readable, so the reviewer of the store needs the
 # source and a build that anyone can repeat. This workflow is that proof.
 
-# A change of the documents alone does not need a build, and a tag has its own workflow.
+# A change that cannot reach the archive does not need a build, and a tag has its own
+# workflow. `store/` holds the words and the images of the listing, and `doc/` the notes;
+# `just package` copies `extension/` only, so none of them can change what is built.
+#
+# Keep this list and what `just package` copies in step. A new directory that does end in
+# the archive must not be here.
 on:
   push:
     branches: [main]
-    paths-ignore: ["**/*.md", "LICENSE"]
+    paths-ignore:
+      - "**/*.md"
+      - "LICENSE"
+      - "doc/**"
+      - "store/**"
+      - "scripts/**"
+      - ".github/ISSUE_TEMPLATE/**"
   pull_request:
-    paths-ignore: ["**/*.md", "LICENSE"]
+    paths-ignore:
+      - "**/*.md"
+      - "LICENSE"
+      - "doc/**"
+      - "store/**"
+      - "scripts/**"
+      - ".github/ISSUE_TEMPLATE/**"
   workflow_dispatch:
 
 permissions:
