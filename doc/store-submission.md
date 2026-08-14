@@ -68,6 +68,23 @@ Two settings decide whether this works at all:
 - The account must be the one that owns the item in the store. Another account can get a
   token and still not be allowed to upload.
 
+### When the review says no
+
+The item stays a draft, so the correction can go up under the **same version**:
+
+1. Correct what the review named. If it is only the listing (a screenshot, a sentence), the
+   dashboard is enough and nothing else is necessary.
+2. If the archive must change, put the correction on main. The release workflow will not
+   send it: the tag of that version exists, so it stops. Run **store-upload** from the
+   Actions tab instead, with the tag to send (empty takes the newest release). It takes the
+   archive of the GitHub release, so the bytes are the ones that were tested.
+
+A version that is already **published** cannot go up a second time; the store refuses the
+same version. Then the fourth part of the version is the way (`1.4.0.1`): write it into
+`extension/manifest.json` and `Cargo.toml` by hand, on a branch, with a `[chore]` commit.
+Nothing computes that number, because only a human knows that the same content must go out
+one more time.
+
 The first upload is by hand: the item does not exist yet, and the listing has to be filled
 in once. After that every release goes through the workflow.
 

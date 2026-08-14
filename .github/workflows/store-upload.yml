@@ -1,0 +1,100 @@
+name: store-upload
+
+# Sends the archive of a release to the Chrome Web Store, by hand.
+#
+# `release.yml` already does this when a version is new. This one exists for the way back:
+# the review says no, the item stays a draft, and the same version has to go up again with
+# a correction. That path cannot use `release.yml`, because the tag exists by then and that
+# workflow stops on a version it already released.
+#
+# The archive comes from the GitHub release, so what goes to the store is the file that was
+# tested and not a new build of a moved branch.
+#
+# A version that is **published** cannot go up a second time (the store refuses the same
+# version). Then the fourth part of the version is the way (`1.4.0.1`); read
+# doc/store-submission.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The tag to send (empty = the newest one)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: store-upload
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Take the archive of the release
+        id: asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WANT: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${WANT}"
+          if [ -z "${tag}" ]; then
+            tag=$(gh release list --limit 1 --json tagName -q '.[0].tagName')
+          fi
+          if [ -z "${tag}" ]; then
+            echo "::error::リリースがありません"
+            exit 1
+          fi
+          gh release download "${tag}" --pattern '*.zip' --dir dist
+          file=$(ls dist/*.zip | head -1)
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "file=${file}" >> "${GITHUB_OUTPUT}"
+          echo "${tag} の ${file} を上げます"
+
+      - name: Upload to the Chrome Web Store
+        if: env.EXTENSION_ID != ''
+        env:
+          EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          FILE: ${{ steps.asset.outputs.file }}
+          TAG: ${{ steps.asset.outputs.tag }}
+        run: |
+          set -euo pipefail
+          token=$(curl -sS -X POST https://oauth2.googleapis.com/token \
+            -d "client_id=${CLIENT_ID}" \
+            -d "client_secret=${CLIENT_SECRET}" \
+            -d "refresh_token=${REFRESH_TOKEN}" \
+            -d "grant_type=refresh_token" | jq -r '.access_token // empty')
+          if [ -z "${token}" ]; then
+            echo "::error::アクセストークンが取れません（Secrets を確認してください）"
+            exit 1
+          fi
+
+          reply=$(curl -sS -X PUT \
+            -H "Authorization: Bearer ${token}" \
+            -H "x-goog-api-version: 2" \
+            -T "${FILE}" \
+            "https://www.googleapis.com/upload/chromewebstore/v1.1/items/${EXTENSION_ID}?uploadType=media")
+          echo "${reply}" | jq .
+
+          state=$(echo "${reply}" | jq -r '.uploadState // empty')
+          if [ "${state}" = "FAILURE" ]; then
+            echo "${reply}" | jq -r '.itemError[]? | "::error::\(.error_detail)"'
+            echo "公開済みの版と同じ番号は受け付けられません。その場合は 4 つ目の値を使ってください。" >&2
+            exit 1
+          fi
+
+          {
+            echo "### ストアに下書きを上げました（${TAG}）"
+            echo
+            echo "\`uploadState\` = ${state}。公開はダッシュボードのボタンです。"
+          } >> "${GITHUB_STEP_SUMMARY}"
