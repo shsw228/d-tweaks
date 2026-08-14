@@ -9,10 +9,10 @@
 #
 # # The subjects become conventional commits before anything reads them
 #
-# Only a change that reaches the archive makes a release. `[chore]`, `[docs]`, `[build]`
-# and `[ci]` are skipped, so a run of them alone computes the same version and no release
-# pull request appears. A `CHANGELOG.md` that is written again therefore holds only the
-# releases and what was in them; the commits stay in the history of git.
+# `[docs]`, `[build]` and `[ci]` are in the changelog: a release that has them is easier to
+# read with them in it. They do not make a release **of their own**, and that decision is in
+# `release-pr.yml`, not here: git-cliff can only take a kind out of the version and out of
+# the changelog together (`skip`), and the changelog is the place where they belong.
 #
 # The subjects are `[kind] text` in Japanese. `commit_preprocessors` turns `[feat]` into
 # `feat:` and so on, and `conventional_commits = true` reads that form.
@@ -70,14 +70,9 @@ commit_parsers = [
   { message = "^refactor", group = "♻️ Refactoring" },
   { message = "^style", group = "💄 Style" },
   { message = "^test", group = "✅ Tests" },
-  # These do not reach the archive, so they do not make a release of their own.
-  #
-  # `skip` also keeps them out of the changelog. That is the point: the changelog is the
-  # note of a release, and a release exists only when what the user installs has changed.
-  # The commits themselves stay in the history of git.
+  { message = "^docs", group = "📝 Documentation" },
+  { message = "^build|^ci", group = "🔧 Build and CI" },
   { message = "^chore", skip = true },
-  { message = "^docs", skip = true },
-  { message = "^build|^ci", skip = true },
   { message = ".*", group = "📦 Other" },
 ]
 tag_pattern = "[0-9]*"

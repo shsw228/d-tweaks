@@ -493,6 +493,20 @@ puts the CSS of the enabled features into the tab of the sender with
 A change of a single feature still needs a reload. Only the master switch has this path,
 because only it leaves a page with nothing at all.
 
+## When a release happens
+
+`release-pr.yml` opens a release pull request only when something since the last tag
+reaches the archive. `[chore]`, `[docs]`, `[build]` and `[ci]` change nothing that a user
+installs, so they wait for the next real change and ride with it.
+
+The test is in the workflow and not in `cliff.toml`, because git-cliff can only take a kind
+out of the version **and** out of the changelog at the same time (`skip`). Those kinds
+belong in the changelog: a release that carries them reads better with them in it. So the
+changelog keeps them and the workflow decides whether a release exists at all.
+
+A subject without a known kind counts as worth a release. An unknown commit must not be
+able to stop one.
+
 ## Packaging
 
 `just package` makes `dist/d-tweaks-<version>.zip` for the Chrome Web Store.
