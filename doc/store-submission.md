@@ -33,6 +33,17 @@ header.
   of the extension itself** to the search interface of nicovideo, which that interface
   requires. No request of the user is changed.
 
+## There is no field for a note to the reviewer
+
+The dashboard has no free text for the review any more. What a reviewer reads is the text of
+the privacy tab, so the three things that must reach them are inside the answer of the
+single purpose (`store/listing/justification-ja.txt`):
+
+- The site is for subscribers. Without a subscription the extension shows nothing, so a
+  reviewer cannot run it. The screenshots are the evidence.
+- The WASM is compiled and not obfuscated. The source, the tag and the build command.
+- No download, no redistribution, and the DRM fields are never read.
+
 ## Code readability
 
 The logic is Rust compiled to WebAssembly, so a reviewer cannot read the binary. Nothing

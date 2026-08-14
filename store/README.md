@@ -25,6 +25,29 @@ base64, so the file works from `file://` in headless Chrome.
 The picture of a video can be black in a capture: Chrome blanks protected video while a
 screen recording runs (see `player_modal`). That is not a defect.
 
+## The icon of the listing
+
+The dashboard asks for the icon of the store as its own file, so `assets/store-icon-128.png`
+is that file: the picture of `extension/icons/icon128.png` at 96px in a 128px frame, with
+16px of transparent margin around it. That margin is what the guidelines of the store ask
+for, and it makes the icon the same size as the others in a list.
+
+To fill the frame instead, upload `extension/icons/icon128.png` itself: the version without
+the margin is that file, and a copy of it here would be the same picture twice.
+
+The file comes from `extension/icons/icon128.png`, so a new icon means making it again:
+
+```sh
+uv run --with pillow python3 -c "
+from PIL import Image
+src = Image.open('extension/icons/icon128.png').convert('RGBA')
+art = src.resize((96, 96), Image.LANCZOS)
+canvas = Image.new('RGBA', (128, 128), (0, 0, 0, 0))
+canvas.paste(art, (16, 16), art)
+canvas.save('store/assets/store-icon-128.png')
+"
+```
+
 ## The settings page
 
 `chrome-extension://` cannot be opened outside the browser, so that page is rendered from
