@@ -29,6 +29,8 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use web_sys::{Document, Element};
 
+use d_tweaks_shared::text::t;
+
 use crate::dom::{element, text_of};
 use crate::log;
 
@@ -47,6 +49,18 @@ const BRACKETS: [(char, char); 5] = [
 /// Split on `separator`, but only outside of the brackets.
 ///
 /// The depth never goes below 0, so a bracket without its pair does not break this.
+/// The heading of a block that the site names.
+///
+/// The three words also select the text of the site (`strip_prefix_label`), so they stay
+/// Japanese there and only the heading changes.
+fn detail_heading(label: &str) -> &'static str {
+    match label {
+        "キャスト" => t("work.cast"),
+        "スタッフ" => t("work.staff"),
+        _ => t("work.year"),
+    }
+}
+
 fn split_top_level(text: &str, separator: char) -> Vec<String> {
     let mut parts = Vec::new();
     let mut current = String::new();
@@ -216,7 +230,7 @@ pub fn render() -> Result<bool, JsValue> {
     if let Some(outline) = &outline
         && let Some(text) = text_of(outline, ".outlineContainer > p")
     {
-        let (block_root, body) = block(&document, "あらすじ")?;
+        let (block_root, body) = block(&document, t("work.summary"))?;
         let paragraph = element(&document, "p", "dt-detail__prose")?;
         paragraph.set_text_content(Some(&text));
         body.append_child(&paragraph)?;
@@ -227,7 +241,7 @@ pub fn render() -> Result<bool, JsValue> {
     if let Some(outline) = &outline {
         let links = outline.query_selector_all(".footerLink a")?;
         if links.length() > 0 {
-            let (block_root, body) = block(&document, "ジャンル")?;
+            let (block_root, body) = block(&document, t("work.genre"))?;
             let list = element(&document, "div", "dt-detail__chips")?;
             for index in 0..links.length() {
                 let Some(node) = links.item(index) else {
@@ -280,7 +294,7 @@ pub fn render() -> Result<bool, JsValue> {
                     if items.is_empty() {
                         continue;
                     }
-                    let (block_root, body) = block(&document, label)?;
+                    let (block_root, body) = block(&document, detail_heading(label))?;
                     let pairs = pair_list(&document, &items)?;
                     body.append_child(&pairs)?;
                     root.append_child(&block_root)?;
@@ -293,9 +307,9 @@ pub fn render() -> Result<bool, JsValue> {
 
         // --- The tags. Only names, but they are the only search links. ---
         if let Some(tags) = &tags
-            && let Some(chips) = chip_list(&document, tags, "その他")?
+            && let Some(chips) = chip_list(&document, tags, t("work.other"))?
         {
-            let (block_root, body) = block(&document, "その他")?;
+            let (block_root, body) = block(&document, t("work.other"))?;
             body.append_child(&chips)?;
             root.append_child(&block_root)?;
         }

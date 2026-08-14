@@ -33,6 +33,8 @@ use web_sys::{
     MutationObserverInit, Url,
 };
 
+use d_tweaks_shared::text::t;
+
 use crate::dom::{element, text_of};
 use crate::features::comments;
 use crate::log;
@@ -601,7 +603,7 @@ pub(crate) fn render(document: &Document, card: &Card) -> Result<Element, JsValu
     }
     if card.watched {
         let mark = element(document, "span", "dt-card__watched")?;
-        mark.set_text_content(Some("視聴済"));
+        mark.set_text_content(Some(t("card.watched")));
         root.append_child(&mark)?;
     }
 

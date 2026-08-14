@@ -48,6 +48,8 @@ use web_sys::{Element, HtmlElement, HtmlIFrameElement, KeyboardEvent, MouseEvent
 
 use d_tweaks_shared::{chrome, json};
 
+use d_tweaks_shared::text::t;
+
 use crate::dom::{document, element};
 use crate::features::{comments, controls, frame, player_meta};
 use crate::{log, sleep};
@@ -304,17 +306,13 @@ fn open(url: &str, target: Option<comments::Target>) -> Result<(), JsValue> {
     let fallback = element(&doc, "div", "dt-modal__fallback")?;
     fallback.set_attribute("hidden", "")?;
     let message = element(&doc, "p", "dt-modal__message")?;
-    message.set_text_content(Some(
-        "サイトの CSP（frame-src）によって、このページ内での再生がブロックされました。",
-    ));
+    message.set_text_content(Some(t("modal.csp")));
     let hint = element(&doc, "p", "dt-modal__hint")?;
-    hint.set_text_content(Some(
-        "この機能を ON にすると frame-src を緩める規則が有効になります。切り替えた直後はページを再読み込みしてください。",
-    ));
+    hint.set_text_content(Some(t("modal.csp.hint")));
     // This extension does not open tabs, so the link uses the same tab
     let open_link = element(&doc, "a", "dt-modal__openTab")?;
     open_link.set_attribute("href", url)?;
-    open_link.set_text_content(Some("このタブでプレイヤーを開く"));
+    open_link.set_text_content(Some(t("modal.open_tab")));
     fallback.append_child(&message)?;
     fallback.append_child(&hint)?;
     fallback.append_child(&open_link)?;
@@ -349,7 +347,7 @@ fn open(url: &str, target: Option<comments::Target>) -> Result<(), JsValue> {
     // handle is also cut and nobody can take it again. It is a child of the stage,
     // over the left edge of the side column.
     let resizer = element(&doc, "div", "dt-modal__resizer")?;
-    resizer.set_attribute("title", "ドラッグで幅を変更 / ダブルクリックで開閉")?;
+    resizer.set_attribute("title", t("modal.resizer.title"))?;
     stage.append_child(&resizer)?;
     install_resizer(&panel, &resizer)?;
 

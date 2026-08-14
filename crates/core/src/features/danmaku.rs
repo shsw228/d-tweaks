@@ -20,7 +20,7 @@ use web_sys::{
     HtmlMediaElement,
 };
 
-use d_tweaks_shared::text::t;
+use d_tweaks_shared::text::{t, t_fill};
 use d_tweaks_shared::{chrome, json};
 
 use crate::features::frame;
@@ -834,7 +834,7 @@ const OFFSET_LIMIT: f64 = 120.0;
 const OFFSET_STEPS: &[f64] = &[-5.0, -1.0, 1.0, 5.0];
 
 /// Label of the row that can wrap. A video title rarely fits on one line.
-const DEBUG_WRAP_LABEL: &str = "取得元";
+const DEBUG_WRAP_LABEL: &str = "debug.source";
 /// Values longer than this get a tooltip, so a cut value stays readable.
 const DEBUG_TOOLTIP_MIN: usize = 18;
 
@@ -889,7 +889,10 @@ fn build_offset(
         let button = document.create_element("button")?;
         button.set_class_name("dt-offset__button");
         button.set_attribute("type", "button")?;
-        button.set_attribute("title", &format!("コメントを {step:+.0} 秒ずらす"))?;
+        button.set_attribute(
+            "title",
+            &t_fill("offset.step.title", &[("step", &format!("{step:+.0}"))]),
+        )?;
         button.set_text_content(Some(&format!("{step:+.0}")));
 
         let offset = Rc::clone(offset);
@@ -962,23 +965,23 @@ async fn save_offset(key: &str, seconds: f64) {
     }
 }
 
-/// Row labels of the debug view. Keep the same order as `debug_values`.
+/// Keys of the row labels of the debug view. Keep the same order as `debug_values`.
 const DEBUG_LABELS: &[&str] = &[
-    "配信フレームレート",
-    "コマ番号",
-    "解像度",
-    "再生位置",
-    "先読み",
-    "再生状態",
-    "読み込み",
-    "フレーム数",
-    "復号時間",
-    "弾幕描画",
-    "コメント",
-    "尺差",
-    "描画面",
-    "取得元",
-    "動画",
+    "debug.fps",
+    "debug.frame",
+    "debug.size",
+    "debug.time",
+    "debug.buffer",
+    "debug.state",
+    "debug.ready",
+    "debug.frames",
+    "debug.decode",
+    "debug.draw",
+    "debug.comments",
+    "debug.length",
+    "debug.canvas",
+    "debug.source",
+    "debug.video",
 ];
 
 /// Debug view with the values of the video.
@@ -1011,7 +1014,7 @@ impl DebugView {
         for label in DEBUG_LABELS {
             let key = document.create_element("span")?;
             key.set_class_name("dt-debug__key");
-            key.set_text_content(Some(label));
+            key.set_text_content(Some(t(label)));
             root.append_child(&key)?;
 
             let value = document.create_element("span")?;
@@ -1067,29 +1070,29 @@ impl DebugView {
 
 fn optional_seconds(value: Option<f64>) -> String {
     match value {
-        Some(seconds) => format!("{seconds:.1} 秒"),
+        Some(seconds) => t_fill("debug.seconds", &[("n", &format!("{seconds:.1}"))]),
         None => "—".to_string(),
     }
 }
 
 fn ready_state_name(state: u16) -> &'static str {
     match state {
-        0 => "未取得",
-        1 => "メタデータのみ",
-        2 => "現在位置のみ",
-        3 => "先まで再生可",
-        4 => "十分",
-        _ => "不明",
+        0 => t("debug.ready.0"),
+        1 => t("debug.ready.1"),
+        2 => t("debug.ready.2"),
+        3 => t("debug.ready.3"),
+        4 => t("debug.ready.4"),
+        _ => t("debug.unknown"),
     }
 }
 
 fn network_state_name(state: u16) -> &'static str {
     match state {
-        0 => "空",
-        1 => "待機",
-        2 => "読み込み中",
-        3 => "ソースなし",
-        _ => "不明",
+        0 => t("debug.net.0"),
+        1 => t("debug.net.1"),
+        2 => t("debug.net.2"),
+        3 => t("debug.net.3"),
+        _ => t("debug.unknown"),
     }
 }
 
@@ -1098,7 +1101,7 @@ fn debug_values(snapshot: &Snapshot, draw_fps: Option<f64>) -> Vec<String> {
     let source_fps = match snapshot.source_fps {
         Some(fps) => format!("{fps:.3} fps"),
         // No frame arrives before the play starts
-        None => "測定中".to_string(),
+        None => t("debug.measuring").to_string(),
     };
     let size = match snapshot.frame_size {
         Some((width, height)) => format!("{width:.0}×{height:.0}"),
@@ -1106,22 +1109,30 @@ fn debug_values(snapshot: &Snapshot, draw_fps: Option<f64>) -> Vec<String> {
     };
     let measured_draw = match draw_fps {
         Some(fps) => format!("{fps:.1} fps"),
-        None => "測定中".to_string(),
+        None => t("debug.measuring").to_string(),
     };
     let quality = match snapshot.quality {
-        Some((total, dropped, corrupted)) => {
-            format!("復号 {total:.0} / 落ち {dropped:.0} / 破損 {corrupted:.0}")
-        }
+        Some((total, dropped, corrupted)) => t_fill(
+            "debug.frames.value",
+            &[
+                ("total", &format!("{total:.0}")),
+                ("dropped", &format!("{dropped:.0}")),
+                ("corrupted", &format!("{corrupted:.0}")),
+            ],
+        ),
         None => "—".to_string(),
     };
     let remaining = (snapshot.duration - snapshot.current_time).max(0.0);
     // Difference of the lengths. This is mostly the advertisement at the end, so
     // it must not become the offset.
     let gap = match snapshot.source_seconds {
-        Some(source) if snapshot.duration.is_finite() => format!(
-            "{:+.0}s（ニコ {source:.0} / 配信 {:.0}）",
-            source - snapshot.duration,
-            snapshot.duration
+        Some(source) if snapshot.duration.is_finite() => t_fill(
+            "debug.length.value",
+            &[
+                ("diff", &format!("{:+.0}", source - snapshot.duration)),
+                ("nico", &format!("{source:.0}")),
+                ("site", &format!("{:.0}", snapshot.duration)),
+            ],
         ),
         _ => "—".to_string(),
     };
@@ -1131,37 +1142,67 @@ fn debug_values(snapshot: &Snapshot, draw_fps: Option<f64>) -> Vec<String> {
         source_fps,
         format!("f{}", snapshot.frame),
         size,
-        format!(
-            "{:.2} / {:.2} 秒（残り {remaining:.1}）",
-            snapshot.current_time, snapshot.duration
+        t_fill(
+            "debug.time.value",
+            &[
+                ("current", &format!("{:.2}", snapshot.current_time)),
+                ("duration", &format!("{:.2}", snapshot.duration)),
+                ("remaining", &format!("{remaining:.1}")),
+            ],
         ),
         optional_seconds(snapshot.buffered_ahead),
-        format!(
-            "{} / 速度 {:.2}x",
-            if snapshot.paused {
-                "停止中"
-            } else {
-                "再生中"
-            },
-            snapshot.playback_rate
+        t_fill(
+            "debug.rate",
+            &[
+                (
+                    "state",
+                    if snapshot.paused {
+                        t("debug.paused")
+                    } else {
+                        t("debug.playing")
+                    },
+                ),
+                ("rate", &format!("{:.2}", snapshot.playback_rate)),
+            ],
         ),
         format!(
             "{} / {}",
             ready_state_name(snapshot.ready_state),
             network_state_name(snapshot.network_state)
         ),
-        format!("表示 {:.0} / {quality}", snapshot.presented),
-        format!("{:.2} ms", snapshot.processing * 1000.0),
-        format!(
-            "設定 {:.0} fps / 実測 {measured_draw}",
-            snapshot.draw_fps_setting
+        t_fill(
+            "debug.presented",
+            &[
+                ("presented", &format!("{:.0}", snapshot.presented)),
+                ("quality", &quality),
+            ],
         ),
-        format!(
-            "取得 {} / 対象 {} / 表示中 {}",
-            snapshot.comments_total, snapshot.comments_target, snapshot.comments_now
+        format!("{:.2} ms", snapshot.processing * 1000.0),
+        t_fill(
+            "debug.draw.value",
+            &[
+                ("set", &format!("{:.0}", snapshot.draw_fps_setting)),
+                ("measured", &measured_draw),
+            ],
+        ),
+        t_fill(
+            "debug.comments.value",
+            &[
+                ("got", &snapshot.comments_total.to_string()),
+                ("target", &snapshot.comments_target.to_string()),
+                ("now", &snapshot.comments_now.to_string()),
+            ],
         ),
         gap,
-        format!("{LANES} 段 / {canvas_width:.0}×{canvas_height:.0} CSS px @{ratio:.1}x"),
+        t_fill(
+            "debug.canvas.value",
+            &[
+                ("lanes", &LANES.to_string()),
+                ("w", &format!("{canvas_width:.0}")),
+                ("h", &format!("{canvas_height:.0}")),
+                ("ratio", &format!("{ratio:.1}")),
+            ],
+        ),
         if snapshot.video_title.is_empty() {
             "—".to_string()
         } else {

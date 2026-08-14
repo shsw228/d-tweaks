@@ -45,8 +45,9 @@ use wasm_bindgen_futures::{JsFuture, spawn_local};
 use web_sys::{Document, Element, HtmlIFrameElement, HtmlInputElement, KeyboardEvent, Response};
 
 use d_tweaks_shared::messages::{CommentQuery, CommentReply, parse_reply};
-use d_tweaks_shared::text::t;
 use d_tweaks_shared::{chrome, json, nicovideo, settings};
+
+use d_tweaks_shared::text::{t, t_fill};
 
 use crate::dom::attr;
 use crate::features::{danmaku, frame};
@@ -261,7 +262,7 @@ pub fn attach(
             Ok(row) => row,
             Err(err) => {
                 log(&format!("動画指定の行を作れませんでした: {err:?}"));
-                status.set_text_content(Some("コメント: 準備に失敗しました"));
+                status.set_text_content(Some(t("comments.setup_failed")));
                 return;
             }
         };
@@ -554,7 +555,16 @@ async fn load(
                 // The address that the user gave is shown, so a wrong one is visible
                 let mark = if pinned { t("pin.mark") } else { "" };
                 (
-                    format!("{work_title} {label}／{count}（{video_id} {mark}）"),
+                    t_fill(
+                        "comments.count",
+                        &[
+                            ("work", &work_title),
+                            ("label", label),
+                            ("count", &count.to_string()),
+                            ("video", &video_id),
+                            ("mark", mark),
+                        ],
+                    ),
                     handle,
                     pinned,
                 )
@@ -570,7 +580,7 @@ async fn load(
             CommentReply::Error(message) => {
                 log(&format!("コメント取得に失敗: {message}"));
                 (
-                    format!("コメントを取得できません: {message}"),
+                    t_fill("comments.error", &[("message", &message)]),
                     without_comments(ctx).await,
                     false,
                 )
@@ -601,7 +611,7 @@ async fn without_comments(ctx: &Ctx) -> Option<danmaku::Handle> {
     }
     let options = danmaku::Options {
         video_id: "",
-        video_title: "コメントなし",
+        video_title: t("comments.none"),
         video_seconds: None,
         draw_fps: settings::danmaku_fps().await,
         duration: settings::danmaku_duration().await,

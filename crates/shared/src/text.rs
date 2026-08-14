@@ -72,6 +72,18 @@ pub fn t(key: &str) -> &'static str {
     Box::leak(key.to_string().into_boxed_str())
 }
 
+/// The word of `key` with `{name}` filled in.
+///
+/// A sentence with a number cannot be cut into pieces: the order of the pieces differs
+/// between the two languages. So the whole sentence is one word with holes in it.
+pub fn t_fill(key: &str, values: &[(&str, &str)]) -> String {
+    let mut text = t(key).to_string();
+    for (name, value) in values {
+        text = text.replace(&format!("{{{name}}}"), value);
+    }
+    text
+}
+
 /// `(key, 日本語, English)`.
 pub const WORDS: &[(&str, &str, &str)] = &[
     // --- The control bar of the float player ---
@@ -240,6 +252,221 @@ pub const WORDS: &[(&str, &str, &str)] = &[
         "popup.cleared.failed",
         "控えを消せませんでした。",
         "The cache was not removed.",
+    ),
+    // --- The card of a list ---
+    ("card.watched", "視聴済", "Watched"),
+    // --- The head bar and the skip button of the float player ---
+    ("meta.skip", "本編へスキップ ▶︎", "Skip to the main story ▶︎"),
+    ("meta.next", "次の話へ ▶︎", "Next episode ▶︎"),
+    ("meta.main", "本編", "Main story"),
+    ("meta.resume", "前回", "Last time"),
+    ("meta.latest", "最新話", "Latest"),
+    // --- The float window ---
+    (
+        "modal.csp",
+        "サイトの CSP（frame-src）によって、このページ内での再生がブロックされました。",
+        "The CSP of the site (frame-src) blocked the playback on this page.",
+    ),
+    (
+        "modal.csp.hint",
+        "この機能を ON にすると frame-src を緩める規則が有効になります。切り替えた直後はページを再読み込みしてください。",
+        "Turning this feature on enables the rule that opens frame-src. Reload the page after the change.",
+    ),
+    (
+        "modal.open_tab",
+        "このタブでプレイヤーを開く",
+        "Open the player in this tab",
+    ),
+    (
+        "modal.resizer.title",
+        "ドラッグで幅を変更 / ダブルクリックで開閉",
+        "Drag to change the width, double click to open or close",
+    ),
+    (
+        "comments.setup_failed",
+        "コメント: 準備に失敗しました",
+        "Comments: the start failed",
+    ),
+    (
+        "comments.error",
+        "コメントを取得できません: {message}",
+        "The comments did not arrive: {message}",
+    ),
+    ("comments.none", "コメントなし", "No comments"),
+    (
+        "comments.count",
+        "{work} {label}／コメント {count} 件（{video}{mark}）",
+        "{work} {label} — {count} comments ({video}{mark})",
+    ),
+    (
+        "offset.step.title",
+        "コメントを {step} 秒ずらす",
+        "Move the comments by {step} seconds",
+    ),
+    // --- The infinite scroll ---
+    (
+        "scroll.first",
+        "全 {total} ページ / 1 ページ目まで表示",
+        "{total} pages, showing page 1",
+    ),
+    (
+        "scroll.loading",
+        "{page} ページ目を読み込み中…",
+        "Loading page {page}…",
+    ),
+    ("scroll.all", "すべて表示しました", "Everything is shown"),
+    (
+        "scroll.progress",
+        "{page} / {total} ページまで表示",
+        "Showing page {page} of {total}",
+    ),
+    (
+        "scroll.failed",
+        "自動読み込みに失敗しました。ページ送りを使ってください。",
+        "The next page did not arrive. Use the paging of the site.",
+    ),
+    // --- The float search ---
+    (
+        "search.hint",
+        "作品名を入れると、打ちながら結果が出ます",
+        "Type a title; the results arrive while you type",
+    ),
+    ("search.label", "作品を検索", "Search for a work"),
+    ("search.placeholder", "作品名で検索", "Search by title"),
+    ("search.sort.label", "並び替え", "Order"),
+    ("search.no_rental", "レンタルを除く", "No rentals"),
+    (
+        "search.short",
+        "もう少し入れてください（2 文字から）",
+        "A little more, please (two letters or more)",
+    ),
+    ("search.running", "検索中…", "Searching…"),
+    (
+        "search.rental_hint",
+        "（レンタルを除いています）",
+        " (the rentals are left out)",
+    ),
+    (
+        "search.empty",
+        "「{word}」に一致する作品はありません{hint}",
+        "Nothing matches \"{word}\"{hint}",
+    ),
+    ("search.failed", "検索できませんでした", "The search failed"),
+    ("search.count", "{total} 件", "{total} works"),
+    (
+        "search.count.loaded",
+        "{total} 件中 {loaded} 件",
+        "{loaded} of {total} works",
+    ),
+    ("search.more", "読み込み中…", "Loading…"),
+    (
+        "search.more.failed",
+        "続きを読み込めませんでした",
+        "The next page did not arrive",
+    ),
+    ("badge.favorite", "気になる", "Favorite"),
+    ("badge.watching", "視聴中", "Watching"),
+    ("badge.rental", "レンタル", "Rental"),
+    // --- The own top page ---
+    ("top.all", "すべて見る", "See all"),
+    ("top.watch", "この作品を見る", "Watch this work"),
+    (
+        "top.work.label",
+        "この作品のページへ",
+        "To the page of this work",
+    ),
+    (
+        "top.more",
+        "もっと見る（あと {count} 件）",
+        "More ({count} left)",
+    ),
+    ("top.browse", "さがす", "Find"),
+    (
+        "top.list.all",
+        "この一覧をすべて見る",
+        "See all of this list",
+    ),
+    ("top.ranking", "デイリーランキング", "Daily ranking"),
+    ("top.rank", "{label} {rank}位", "{label} no. {rank}"),
+    ("top.other", "おすすめ", "Recommended"),
+    // --- The work page ---
+    ("work.summary", "あらすじ", "Summary"),
+    ("work.genre", "ジャンル", "Genres"),
+    ("work.other", "その他", "Other"),
+    ("work.cast", "キャスト", "Cast"),
+    ("work.staff", "スタッフ", "Staff"),
+    ("work.year", "製作年", "Year"),
+    ("work.mylist", "マイリスト", "My list"),
+    ("work.favorite", "気になる", "Favorite"),
+    // --- The debug view ---
+    ("debug.fps", "配信フレームレート", "Source frame rate"),
+    ("debug.frame", "コマ番号", "Frame"),
+    ("debug.size", "解像度", "Resolution"),
+    ("debug.time", "再生位置", "Position"),
+    ("debug.buffer", "先読み", "Buffered"),
+    ("debug.state", "再生状態", "State"),
+    ("debug.ready", "読み込み", "Ready"),
+    ("debug.frames", "フレーム数", "Frames"),
+    ("debug.decode", "復号時間", "Decode"),
+    ("debug.draw", "弾幕描画", "Overlay"),
+    ("debug.comments", "コメント", "Comments"),
+    ("debug.length", "尺差", "Length"),
+    ("debug.canvas", "描画面", "Canvas"),
+    ("debug.source", "取得元", "From"),
+    ("debug.video", "動画", "Video"),
+    ("debug.measuring", "測定中", "Measuring"),
+    ("debug.seconds", "{n} 秒", "{n} s"),
+    ("debug.ready.0", "未取得", "Nothing"),
+    ("debug.ready.1", "メタデータのみ", "Metadata only"),
+    ("debug.ready.2", "現在位置のみ", "Current position only"),
+    ("debug.ready.3", "先まで再生可", "Can play ahead"),
+    ("debug.ready.4", "十分", "Enough"),
+    ("debug.net.0", "空", "Empty"),
+    ("debug.net.1", "待機", "Idle"),
+    ("debug.net.2", "読み込み中", "Loading"),
+    ("debug.net.3", "ソースなし", "No source"),
+    ("debug.unknown", "不明", "Unknown"),
+    ("debug.playing", "再生中", "Playing"),
+    ("debug.paused", "停止中", "Paused"),
+    (
+        "debug.rate",
+        "{state} / 速度 {rate}x",
+        "{state} / rate {rate}x",
+    ),
+    (
+        "debug.frames.value",
+        "復号 {total} / 落ち {dropped} / 破損 {corrupted}",
+        "decoded {total} / dropped {dropped} / corrupt {corrupted}",
+    ),
+    (
+        "debug.presented",
+        "表示 {presented} / {quality}",
+        "presented {presented} / {quality}",
+    ),
+    (
+        "debug.draw.value",
+        "設定 {set} fps / 実測 {measured}",
+        "set {set} fps / measured {measured}",
+    ),
+    (
+        "debug.time.value",
+        "{current} / {duration} 秒（残り {remaining}）",
+        "{current} / {duration} s (left {remaining})",
+    ),
+    (
+        "debug.length.value",
+        "{diff}s（ニコ {nico} / 配信 {site}）",
+        "{diff}s (nicovideo {nico} / site {site})",
+    ),
+    (
+        "debug.comments.value",
+        "取得 {got} / 対象 {target} / 表示中 {now}",
+        "got {got} / drawn {target} / on screen {now}",
+    ),
+    (
+        "debug.canvas.value",
+        "{lanes} 段 / {w}×{h} CSS px @{ratio}x",
+        "{lanes} lanes / {w}x{h} CSS px @{ratio}x",
     ),
     // --- The values of the lists (`CHOICES`) ---
     ("opt.auto", "自動", "Auto"),

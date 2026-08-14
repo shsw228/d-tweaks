@@ -294,6 +294,17 @@ Two rules keep this cheap:
 - A missing English word gives the Japanese one, so a half-translated table still works.
   The same is true of `settings::EN`: a setting without a line there stays Japanese.
 
+What stays Japanese, and why:
+
+- **The log.** It is for the developer, not for the user, and it is read next to this
+  document, which is one language.
+- **What matches the site.** `strip_prefix_label` selects the cast and the staff by their
+  Japanese words, and `parse_section` finds the ranking and the rentals by theirs. A
+  translation there would find nothing. The heading that is drawn from the same word is
+  translated (`detail_heading`).
+- **The data of the site.** An episode number keeps the form `第6話`: it is the number that
+  the service gives, and the service is Japanese.
+
 The values of the lists (`CHOICES`) hold a key (`opt.…`) when they are words and the text
 itself when they are not (`24 fps`), so a list of numbers needs no entry in the table.
 

@@ -67,6 +67,7 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys::{Document, Element, HtmlAnchorElement, HtmlElement, MouseEvent, Url};
 
 use d_tweaks_shared::settings;
+use d_tweaks_shared::text::{t, t_fill};
 
 use crate::dom::{attr, element, text_of};
 use crate::features::card_view::{self, Badge, Card};
@@ -373,7 +374,7 @@ fn parse_section(section: &Element) -> Option<Section> {
         }
     }
 
-    let title = text_of(section, ".p-title__text").unwrap_or_else(|| "おすすめ".to_string());
+    let title = text_of(section, ".p-title__text").unwrap_or_else(|| t("top.other").to_string());
     let (items, exps) = parsed.into_iter().unzip();
     Some(Section {
         role: role_of(&title),
@@ -437,7 +438,7 @@ fn head_of(
     if let Some(href) = all_href {
         let el = element(document, "a", "dt-top__all")?;
         el.set_attribute("href", href)?;
-        el.set_text_content(Some("すべて見る"));
+        el.set_text_content(Some(t("top.all")));
         head.append_child(&el)?;
     }
     Ok(head)
@@ -480,7 +481,7 @@ fn render_showcase(
     // which is not valid HTML. So this anchor is only a click area, and the text
     // passes its clicks with `pointer-events` (see the CSS).
     let hit = element(document, "a", "dt-top__heroHit")?;
-    hit.set_attribute("aria-label", "この作品のページへ")?;
+    hit.set_attribute("aria-label", t("top.work.label"))?;
     hero.append_child(&hit)?;
 
     let body = element(document, "div", "dt-top__heroBody")?;
@@ -499,7 +500,7 @@ fn render_showcase(
     let exp = element(document, "p", "dt-top__heroExp")?;
     body.append_child(&exp)?;
     let link = element(document, "a", "dt-top__heroLink")?;
-    link.set_text_content(Some("この作品を見る"));
+    link.set_text_content(Some(t("top.watch")));
     body.append_child(&link)?;
     hero.append_child(&body)?;
 
@@ -575,7 +576,10 @@ fn render_showcase(
                     };
                 }
             }
-            tag.set_text_content(Some(&format!("{label} {}位", index + 1)));
+            tag.set_text_content(Some(&t_fill(
+                "top.rank",
+                &[("label", &label), ("rank", &(index + 1).to_string())],
+            )));
             title.set_text_content(card.work.as_deref().or(card.title.as_deref()));
             exp.set_text_content(summary.as_deref());
             // Ask `card_view` for the destination. An earlier version read a raw
@@ -724,9 +728,9 @@ fn more_button(
 ) -> Result<Element, JsValue> {
     let more = element(document, "button", "dt-top__more")?;
     more.set_attribute("type", "button")?;
-    more.set_text_content(Some(&format!(
-        "もっと見る（あと {} 件）",
-        items.len() - shown
+    more.set_text_content(Some(&t_fill(
+        "top.more",
+        &[("count", &(items.len() - shown).to_string())],
     )));
 
     let items = Rc::new(items.to_vec());
@@ -779,7 +783,7 @@ fn render_row(
 /// shape. Only the selected chip is drawn, so only its images are loaded.
 fn render_browse(document: &Document, sections: Rc<Vec<Section>>) -> Result<Element, JsValue> {
     let root = element(document, "section", "dt-top__browse")?;
-    let head = head_of(document, "さがす", None, None)?;
+    let head = head_of(document, t("top.browse"), None, None)?;
     root.append_child(&head)?;
 
     let chips = element(document, "div", "dt-top__chips")?;
@@ -831,7 +835,7 @@ fn render_browse(document: &Document, sections: Rc<Vec<Section>>) -> Result<Elem
                 && let Ok(link) = element(&document, "a", "dt-top__all")
             {
                 let _ = link.set_attribute("href", href);
-                link.set_text_content(Some("この一覧をすべて見る"));
+                link.set_text_content(Some(t("top.list.all")));
                 let _ = body.append_child(&link);
             }
         })
@@ -865,7 +869,7 @@ fn build(document: &Document, sections: Vec<Section>, anchor: &Element) -> Resul
     // The showcase is the ranking, so the ranking is not a block of its own. A page
     // without a ranking uses the first section.
     let showcase = ranking
-        .map(|s| (s, "デイリーランキング"))
+        .map(|s| (s, t("top.ranking")))
         .or_else(|| sections.first().map(|s| (s, s.title.as_str())));
     if let Some((section, label)) = showcase
         && !section.items.is_empty()
