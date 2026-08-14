@@ -42,7 +42,27 @@ jobs:
           echo "current=${current}" >> "${GITHUB_OUTPUT}"
           echo "next=${next}" >> "${GITHUB_OUTPUT}"
           echo "現在 ${current} / 次 ${next}"
+
+          # Does anything since the tag reach the archive?
+          #
+          # `[chore]`, `[docs]`, `[build]` and `[ci]` change nothing that a user installs, so
+          # they wait for the next real change instead of making a release of their own. They
+          # stay in the changelog (see cliff.toml), which is why this test is here and not
+          # there: git-cliff can only take a kind out of the version and out of the changelog
+          # together.
+          #
+          # A subject without a known kind counts as worth a release: an unknown commit must
+          # not stop one.
+          last=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          range="${last:+${last}..HEAD}"
+          worthy=$(git log --no-merges --format=%s ${range} \
+            | grep -cvE '^\[(chore|docs|build|ci)\]' || true)
+          echo "成果物に届く変更: ${worthy} 件（${range:-全履歴}）"
+
           if [ -z "${next}" ] || [ "${next}" = "${current}" ]; then
+            echo "todo=false" >> "${GITHUB_OUTPUT}"
+          elif [ "${worthy}" -eq 0 ]; then
+            echo "文書と CI だけなので、次の変更まで待つ"
             echo "todo=false" >> "${GITHUB_OUTPUT}"
           else
             echo "todo=true" >> "${GITHUB_OUTPUT}"
