@@ -17,7 +17,7 @@ The extension has three layers.
 |---|---|---|---|
 | 0 | `extension/styles/*.css` | `document_start` | Layout |
 | 1 | `crates/core` (WASM) | `document_start`, then run at `DOMContentLoaded` | Read the DOM and draw the own UI |
-| 2 | `crates/background` (WASM) | Always | Register the CSS. Get the comments |
+| 2 | `crates/background` (WASM) | Always | Register the CSS. Get the comments. Check for a new episode |
 
 Put the layout in layer 0. Only CSS can be ready before the first paint.
 
@@ -28,7 +28,7 @@ Put the layout in layer 0. Only CSS can be ready before the first paint.
 | `shared` | Settings tables. Bindings for the `chrome` API |
 | `core` | Content script |
 | `background` | Service worker |
-| `options` | Settings UI for the options page and the toolbar popup |
+| `options` | Settings UI for the options page, and the list of new episodes in the popup |
 
 `crates/core/src/dom.rs` holds the DOM helpers that every feature needs (`document`,
 `element`, `text_of`, `attr`). Each of those was a private copy in five to seven
@@ -59,7 +59,9 @@ not run. Put the start code in a file.
 2. **Fail safe.** Hide the original DOM only after the own UI is ready. If the
    WASM does not run, the user sees the normal site.
 3. **Keep the traffic low.** Select the image size for each position. Read ahead
-   for one half screen. Keep the last answer. Nothing runs in the background.
+   for one half screen. Keep the last answer. One thing runs without a tab (the check
+   for a new episode), and it must stay at one small request per work; see
+   [Watch for a new episode](#watch-for-a-new-episode).
 4. **Do not touch the DRM data.** Do not read `laUrl`, `contentUrls`,
    `oneTimeKey`, `viewOneTimeToken` or `castContentUri`.
 5. **Do not open a new tab.** The cards use a normal `<a href>`.
@@ -273,6 +275,177 @@ The code now keeps a copy of the index in the memory of the service worker:
 The options page can remove the cache. That page writes to the storage directly,
 so the service worker must forget the copy. `sw.js` sends
 `on_comment_cache_cleared` when the index key is removed.
+
+## Watch for a new episode
+
+A button on a work page registers the work (`crates/core/src/features/episode_watch.rs`),
+`chrome.alarms` asks at an interval, and the number of unread entries is the badge of the
+toolbar icon. The list is what the popup shows.
+
+The default interval is **six hours**. The service delivers an episode inside a day of its
+broadcast, so what a user wants to see is an episode that arrives outside of that day; six
+hours is fine enough to show that, and it is a quarter of the requests of an hourly check.
+An interval of 30 minutes is in the list for a user who wants it, but nothing needs it.
+
+### Do not read the work page
+
+The episode list of a work is in the HTML of `ci_pc?workId=`. That page is 108KB, it is
+rendered for the session (30 `Set-Cookie` headers in the reply) and it has **no `ETag`, no
+`Last-Modified` and no `Cache-Control`** (measured), so a conditional request is not
+possible: every check would cost a full page render.
+
+`rest/WS030101?partId=` gives the same answer in about 1KB:
+
+| Field | Value |
+|---|---|
+| `partDispNumber` | `第20話`, `PROLOGUE` — as the site writes it |
+| `partTitle` | The subtitle |
+| `nextPartId` | The next episode, or `""` at the end |
+| `resultCd` | `1` the episode exists, `0` the id has none |
+
+So the state of a work is the **last episode of the chain**, and one check is: ask for it
+and read `nextPartId`. Nothing new is one request, and a new episode costs one more
+request per episode — a request that also carries the number and the title, so no HTML is
+parsed anywhere.
+
+Three measurements decided this:
+
+- The chain is exactly the episode list of the work page: 25 links on the page, the same
+  25 ids in the same order, and `nextPartId` empty at the end.
+- The ids are **not** one sequence. A digest between two episodes takes an id and is not
+  in the chain (`…007` → `…010`), and the second cour of one work started at `…051`. So
+  the next id cannot be counted; the interface must say it.
+- `WS030101` needs no account. A `fetch` of the service worker is cross-origin, so the
+  default `credentials` sends no cookie, and the check therefore carries nothing of the
+  user.
+
+`WS100107` (`getAlreadyPartList`) was the first candidate, because it takes a list of ids
+in one request. It cannot be used: `partMeasureMilliSec` is present only for an episode
+that the user **watched**, so an id that exists and an id that does not look the same.
+
+### What keeps the number of requests down
+
+| | |
+|---|---|
+| One request per work while nothing changes | the answer of the tail is the whole check |
+| At most four requests at the same time | `MAX_CONCURRENT`. The cap is the throttle |
+| `MAX_PER_RUN` works per run, the one that waited longest first | a long list spreads over the runs, and no work is left out |
+| A work that gives nothing new doubles its own wait | `next_wait_minutes`, up to one day |
+| A visit of a work page is a check that costs nothing | the page holds the list already |
+| No alarm while it cannot matter | the feature off, or no work registered, means no alarm |
+| Nothing while the browser is offline | a failure would only move the back-off away |
+| `MAX_WORKS` works | the traffic of the extension stays under the traffic of one page |
+| A work that gives nothing for 30 days is removed | `STOP_AFTER_DAYS`; a list that only grows would keep asking for ever |
+
+The back-off is the important one: most works that a user registers have ended. Those go
+to one request a day and stay there, and a work that is running comes back to the interval
+of the user the moment it gives an episode.
+
+### The works that are watched are in the popup
+
+The count of the watched works is the `<summary>` of a `<details>`, and the list it counts
+is inside it. So the count is always visible, the list is one click away, and the browser
+holds the open state: no script and no stored setting for it. It is closed by default,
+because the reason to open the popup is a new episode.
+
+A row names the work, says when the next request for it goes out, and has a button that
+drops it. Two of those need a word about why:
+
+- **When it is asked again** is the answer to "why have I heard nothing about this work".
+  The wait doubles every time a work gives nothing (`next_wait_minutes`), so a row can say
+  "in about one day", and without that line the back-off would look like a defect. The
+  `title` attribute has the time of the last episode, which is what the 30-day rule counts.
+- **The button that drops a work** sends `WATCH_REMOVE`, the same message as the button on
+  the work page. Before this, a work could only be dropped by opening its page, which is
+  the one thing a user of this list does not want to do.
+
+The rows are ordered by the next check and not by the registration: the row a user looks
+for is the one that is due.
+
+### The still of the episode costs no request
+
+A row of the popup has the still of the episode. `mainScenePath` is in the same answer that
+found the episode (`WS030101`), so nothing is asked for it; only the image itself is loaded,
+and only while the popup is open. The rows are `loading="lazy"` inside their own scroll, so
+a history of 200 rows loads what is on the screen.
+
+The address is rewritten to the smallest size of the site (`watch::thumb_at_size`, `_2` =
+288x162). A row is 72px wide, so the 640 version would be nine times the bytes for no
+difference. `card_view::resize_thumb` does the same rewrite for a card of a list, but it also
+obeys the resolution setting; that setting is about the lists, so the popup uses the plain
+mechanism.
+
+The path of a visit of the work page reads the image out of the card of the site instead
+(`episode_watch::thumb_of`), so both ways of finding an episode give a row that looks the
+same.
+
+### The watch ends by itself
+
+A work that gives nothing for 30 days is removed from the list, and the list gets a row
+that says so (`STOP_AFTER_DAYS`, `watch::ended_row`).
+
+The signal is the time since the last episode, and not the COMPLETE mark of the site. That
+mark is the **viewing** state of the user (`userInfo.memberFlags` of `WS000105`, measured:
+a work that is half watched gives `["viewed"]`), so it also appears on a work that is still
+running: a watch that ended there would stop exactly when the user is up to date and wants
+the next episode. The site has no flag that says "this work is finished". The time is a
+value that this extension already holds, so the rule costs no request.
+
+Three details:
+
+- The rule runs **only after the site answered**. A failed request is not "the work is
+  finished", and a month without a network would otherwise end every watch.
+- A time of `0` means "not known" (an entry that an older version wrote), and such a work
+  is never stopped.
+- The row is written as read. It is not a new episode, so a number on the badge would say
+  that an episode arrived when none did. The row opens the work page, which is where the
+  button to register the work again is.
+
+### A visit of the page is a check
+
+The content script sends the episode list that the page holds
+(`messages::WATCH_STATE`), so the service worker can move the tail without a request. This
+also repairs a work whose tail the site removed, which the chain alone cannot do.
+
+Those entries are marked as **read**: the user is looking at the episode list, so a badge
+would point at what is already on the screen. They stay in the list, so nothing that was
+found is lost.
+
+### Four at a time, and no wait between them
+
+The first version did one request at a time with a wait of one second between them. That is
+12 seconds for ten works, and the button in the popup makes the user wait for all of it, so
+it was too slow to use.
+
+The cap on the requests that are open at the same time (`MAX_CONCURRENT`) is the throttle
+now, and the wait is gone: ten works need under a second. Four requests of about 1KB is far
+less than the site sends for one page of its own, and the interface has a shared cache of
+ten seconds (`cache-control: s-maxage=10`, measured).
+
+This crate has no async runtime, so a batch is `Promise.all` over
+`wasm_bindgen_futures::future_to_promise`. Two rules make that safe:
+
+- **A check owns its values** (`Job`). A borrow of the list of works would make the checks
+  run one after the other again, and it would not compile.
+- **The state is written between two batches**, never while requests are open (`apply`).
+  So no `RefCell` is borrowed across an `await`.
+
+The chain of a work is still followed one step at a time: each step needs the id that the
+step before it gave. That path runs only when an episode was added.
+
+### The service worker is the only writer
+
+`chrome.storage` is only asynchronous, so a read, a change and a write from two places
+lose one of the two changes; the index of the comment cache had that defect. The work page
+and the popup therefore send a message for every change (`messages::WATCH_*`) and never
+write `dt:watch:*` themselves.
+
+### The alarm is not made again for nothing
+
+`chrome.alarms.create` on a name that exists replaces the alarm **and starts the period
+again**. `sync_alarm` runs on every change of a setting, so without a test the next check
+would be postponed for ever. It reads `chrome.alarms.get` first and writes only when the
+period is different.
 
 ## Two languages
 

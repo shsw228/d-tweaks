@@ -8,3 +8,4 @@ pub mod messages;
 pub mod nicovideo;
 pub mod settings;
 pub mod text;
+pub mod watch;

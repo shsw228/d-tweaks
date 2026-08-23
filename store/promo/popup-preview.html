@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>d-tweaks</title>
+    <!--
+      The same file as the popup of the extension (extension/popup.html), with the paths
+      moved and `mock-chrome.js` in front of the loader. `chrome-extension://` cannot be
+      opened outside the browser, so this is how a picture of the real UI is made: the WASM
+      of crates/options draws it, and only the `chrome` object is a mock.
+
+      Keep it the same as extension/popup.html.
+    -->
+    <link rel="stylesheet" href="../../extension/settings.css" />
+  </head>
+  <body class="compact">
+    <main>
+      <div class="head">
+        <h1>d-tweaks</h1>
+        <span id="version"></span>
+      </div>
+      <details id="watching" open>
+        <summary class="lead" id="newsLead">見張っている作品を読み込んでいます…</summary>
+        <div id="watchingList"></div>
+      </details>
+      <div id="news"></div>
+      <p id="status"></p>
+      <div class="actions">
+        <button type="button" id="checkNow">今すぐ確認</button>
+        <button type="button" id="openOptions">設定を開く</button>
+      </div>
+      <div class="actions">
+        <button type="button" id="reload">ページを再読み込み</button>
+        <button type="button" id="clearNews">一覧を空にする</button>
+      </div>
+    </main>
+    <script>
+      window.__DT_VERSION__ = "1.4.0";
+    </script>
+    <script src="./mock-chrome.js"></script>
+    <script type="module" src="../../extension/settings-loader.js"></script>
+  </body>
+</html>

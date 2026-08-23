@@ -6,13 +6,15 @@ together with the code: the form asks the same questions at every update.
 ## Single purpose
 
 To change how the PC web of dアニメストア is drawn: the lists, the top page, the work
-pages, the search and the playback of one episode on the same page.
+pages, the search and the playback of one episode on the same page. The watch for a new
+episode belongs to the same purpose: it is the work page of that site, read again.
 
 ## Permissions
 
 | Item | Why |
 |---|---|
-| `storage` | The settings and the comment cache. Nothing leaves the browser |
+| `storage` | The settings, the comment cache and the list of new episodes. Nothing leaves the browser |
+| `alarms` | The interval of the check for a new episode. An MV3 service worker is stopped after 30 seconds without work, so a timer cannot survive |
 | `scripting` | The CSS of a feature is registered at `document_start` only while that feature is on. A static CSS entry would show the layout of a disabled feature until `chrome.storage` answers |
 | `declarativeNetRequestWithHostAccess` | Two header rules, each one active only with its feature (see below) |
 | `https://animestore.docomo.ne.jp/*` | The site that this extension changes |
@@ -43,6 +45,19 @@ single purpose (`store/listing/justification-ja.txt`):
   reviewer cannot run it. The screenshots are the evidence.
 - The WASM is compiled and not obfuscated. The source, the tag and the build command.
 - No download, no redistribution, and the DRM fields are never read.
+
+## The periodic request
+
+Only while "watch the works you registered" is on **and** a work is registered does the
+extension send a request without a tab of the site. It is a `GET` of the episode interface
+of the same site (`rest/WS030101?partId=`, about 1KB) that answers "does the last episode
+that is known have a next one?". That interface needs no account, and a `fetch` of the
+service worker is cross-origin, so no cookie is sent.
+
+The limits are in the code (`crates/background/src/watch.rs`): at most four requests at the
+same time, at most twenty works per run, a work that gives nothing new doubles its own wait
+up to one day, and a work that gives nothing for 30 days is removed. The feature off, or no
+work registered, removes the alarm.
 
 ## Code readability
 

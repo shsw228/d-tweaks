@@ -4,14 +4,21 @@
 //! `d_tweaks_shared::settings` (`FEATURES`, `SWITCHES`, `CHOICES`), so a new setting
 //! does not change this file.
 //!
-//! The popup (`popup.html`) and the options page (`options.html`) show the same rows. Two
-//! crates would read the tables twice, so both draw into the same `#settings` and
-//! `body.compact` changes only the appearance. With `compact`, the description goes into
-//! the `title` attribute: a tall page does not fit in a popup.
+//! `body.compact` keeps the rows smaller and puts the description into the `title`
+//! attribute. Only the options page draws rows now, but the popup shares this WASM and
+//! this stylesheet, so that mode stays.
 //!
 //! A write sends `chrome.storage.onChanged`, which starts the service worker, and that
 //! replaces the registrations (`crates/background`). A tab that is already open needs a
 //! reload, so the popup has a reload button.
+//!
+//! # The popup shows the new episodes
+//!
+//! The toolbar icon opens the list of new episodes (`news`), not the settings: a setting is
+//! read one time and a new episode is the reason to look again. `#news` in `popup.html` is
+//! the test between the two, and a button of the popup opens the options page.
+
+mod news;
 
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
@@ -21,7 +28,7 @@ use web_sys::{Document, Element, Event, HtmlInputElement, HtmlOptionElement, Htm
 use d_tweaks_shared::settings::{self, CHOICES, FEATURES, SWITCHES};
 use d_tweaks_shared::text::t;
 
-fn set_status(document: &Document, message: &str) {
+pub(crate) fn set_status(document: &Document, message: &str) {
     if let Some(status) = document.get_element_by_id("status") {
         status.set_text_content(Some(message));
     }
@@ -230,11 +237,6 @@ fn build_nav(document: &Document, cards: Vec<(String, Element)>) -> Result<(), J
 /// The two HTML files hold Japanese, so that a failure of the WASM still shows a readable
 /// page. This replaces them when the WASM runs.
 fn apply_page_words(document: &Document, compact: bool) {
-    let set = |id: &str, key: &str| {
-        if let Some(el) = document.get_element_by_id(id) {
-            el.set_text_content(Some(t(key)));
-        }
-    };
     if let Some(lead) = document.query_selector(".lead").ok().flatten() {
         lead.set_text_content(Some(t(if compact {
             "options.lead.compact"
@@ -245,9 +247,9 @@ fn apply_page_words(document: &Document, compact: bool) {
     if let Some(nav) = document.get_element_by_id("nav") {
         let _ = nav.set_attribute("aria-label", t("options.nav.label"));
     }
-    set("reload", "popup.reload");
-    set("openOptions", "popup.options");
-    set("clearCache", "popup.clear");
+    if let Some(el) = document.get_element_by_id("clearCache") {
+        el.set_text_content(Some(t("popup.clear")));
+    }
 }
 
 /// A card for one group, with its heading. The rows go inside it.
@@ -400,8 +402,23 @@ pub fn start() -> Result<(), JsValue> {
     if let Err(err) = install_actions(&document) {
         web_sys::console::error_1(&err);
     }
+    if let Err(err) = news::install_actions(&document) {
+        web_sys::console::error_1(&err);
+    }
 
     spawn_local(async move {
+        d_tweaks_shared::text::init(settings::ui_lang().await);
+
+        // The popup: the new episodes. The settings are on the options page.
+        if document.get_element_by_id("news").is_some() {
+            news::apply_words(&document);
+            if let Err(err) = news::render(&document).await {
+                web_sys::console::error_1(&err);
+                set_status(&document, t("watch.failed"));
+            }
+            return;
+        }
+
         // The popup has no descriptions
         let compact = document
             .body()
@@ -412,7 +429,6 @@ pub fn start() -> Result<(), JsValue> {
             return;
         };
 
-        d_tweaks_shared::text::init(settings::ui_lang().await);
         let snapshot = match settings::snapshot().await {
             Ok(snapshot) => snapshot,
             Err(err) => {

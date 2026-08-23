@@ -12,21 +12,32 @@
         <h1>d-tweaks</h1>
         <span id="version"></span>
       </div>
-      <p class="lead">切り替えは即座に保存されます。</p>
       <!--
-        crates/options builds the rows from the settings tables. The rows and their order
-        are the same as on the options page, and the id is also #settings.
+        The icon opens the new episodes, not the settings: the settings are read one time
+        and the new episodes are the reason to look here again. `#news` is also the test
+        that tells crates/options which of the two UIs to draw.
       -->
-      <div id="settings"></div>
+      <!--
+        The count is the summary of a `<details>`, so the list of the works it counts is one
+        click away and the browser holds the open state. Closed by default: the reason to
+        open the popup is a new episode, and the works are the answer to "why have I heard
+        nothing".
+      -->
+      <details id="watching">
+        <summary class="lead" id="newsLead">見張っている作品を読み込んでいます…</summary>
+        <div id="watchingList"></div>
+      </details>
+      <div id="news"></div>
       <p id="status"></p>
       <div class="actions">
-        <!-- A write is immediate, but an open page needs a reload -->
-        <button type="button" id="reload">ページを再読み込み</button>
-        <button type="button" id="openOptions">説明つきで開く</button>
+        <button type="button" id="checkNow">今すぐ確認</button>
+        <!-- Every setting, with its description, is on the options page -->
+        <button type="button" id="openOptions">設定を開く</button>
       </div>
       <div class="actions">
-        <!-- A wrong result in the cache makes a correction look like a failure -->
-        <button type="button" id="clearCache">コメントの控えを消す</button>
+        <!-- A setting is written at once, but an open tab needs a reload -->
+        <button type="button" id="reload">ページを再読み込み</button>
+        <button type="button" id="clearNews">一覧を空にする</button>
       </div>
     </main>
     <!-- The CSP (script-src 'self') has no inline script, so this is a real file -->
