@@ -20,6 +20,7 @@
 mod cache;
 mod matching;
 mod niconico;
+mod watch;
 
 use js_sys::Array;
 use wasm_bindgen::prelude::*;
@@ -29,7 +30,7 @@ use web_sys::console;
 use d_tweaks_shared::settings::{self, EXCLUDE_MATCHES, FEATURES, MATCHES};
 use d_tweaks_shared::{chrome, json, messages};
 
-fn log(msg: &str) {
+pub(crate) fn log(msg: &str) {
     console::log_1(&JsValue::from_str(&format!("[d-tweaks/sw] {msg}")));
 }
 
@@ -51,6 +52,7 @@ async fn sync_registrations() -> Result<(), JsValue> {
     // registration through a CSS variable and returns (see `settings::ENABLED_CSS`).
     if !settings::is_extension_enabled().await {
         sync_rulesets(false, false).await;
+        watch::sync_alarm().await;
         log("全体が無効なので、登録をすべて外した");
         return Ok(());
     }
@@ -107,6 +109,9 @@ async fn sync_registrations() -> Result<(), JsValue> {
         feature_on(settings::COMMENTS),
     )
     .await;
+    // The only feature that acts while no tab is open. Nothing is registered for it, so
+    // its state lives in the alarm.
+    watch::sync_alarm().await;
 
     log(&format!("登録を更新: [{}]", on.join(", ")));
     Ok(())
@@ -148,6 +153,9 @@ fn run_sync() {
 pub fn on_installed() {
     log("onInstalled");
     run_sync();
+    spawn_local(async {
+        watch::refresh_badge().await;
+    });
     // An old map after a change of the match logic makes a correction have no effect
     spawn_local(async {
         match cache::drop_stale_video_entries().await {
@@ -186,6 +194,21 @@ pub fn on_comment_cache_cleared() {
 pub fn on_startup() {
     log("onStartup");
     run_sync();
+    // The badge does not survive a restart of the browser, and the unread entries do
+    spawn_local(async {
+        watch::refresh_badge().await;
+    });
+}
+
+/// Called from `chrome.alarms.onAlarm`. The periodic check for a new episode.
+#[wasm_bindgen]
+pub fn on_alarm(name: String) {
+    if name != watch::ALARM {
+        return;
+    }
+    spawn_local(async {
+        watch::run().await;
+    });
 }
 
 /// Called from `chrome.runtime.onMessage`. Returns the reply.
@@ -205,7 +228,7 @@ pub async fn on_message(message: JsValue, sender: JsValue) -> JsValue {
 }
 
 /// A readable string of a `JsValue` error.
-fn describe(err: &JsValue) -> String {
+pub(crate) fn describe(err: &JsValue) -> String {
     if let Some(text) = err.as_string() {
         return text;
     }
@@ -217,6 +240,13 @@ async fn handle(message: &JsValue, sender: &JsValue) -> Result<JsValue, JsValue>
     match json::get_string(message, "type").as_deref() {
         Some(messages::COMMENTS) => comments(message).await,
         Some(messages::ENABLE_NOW) => enable_now(sender).await,
+        Some(messages::WATCH_STATE) => watch::on_state(message).await,
+        Some(messages::WATCH_ADD) => watch::on_add(message).await,
+        Some(messages::WATCH_REMOVE) => watch::on_remove(message).await,
+        Some(messages::WATCH_LIST) => watch::on_list().await,
+        Some(messages::WATCH_SEEN) => watch::on_seen().await,
+        Some(messages::WATCH_CLEAR) => watch::on_clear().await,
+        Some(messages::WATCH_CHECK) => watch::on_check().await,
         // Not for this extension. Return undefined and leave it to another listener.
         _ => Ok(JsValue::UNDEFINED),
     }

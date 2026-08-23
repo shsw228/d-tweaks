@@ -1,0 +1,132 @@
+/*
+ * d-tweaks / episode-watch
+ *
+ * The button on a work page that registers the work for the new-episode watch
+ * (crates/core/src/features/episode_watch.rs).
+ *
+ * The button has two hosts, and this file must be complete on its own, because
+ * work-hero.css is absent while that feature is off:
+ *
+ *   - `.dt-hero__actions` (work-hero is on): over the key visual, so white on dark, and
+ *     the same pill as `.dt-action` of that file. The few declarations that repeat are
+ *     the price of a file that does not depend on another one.
+ *   - `.actionArea` of the site (work-hero is off): a white area, so dark on light.
+ *
+ * html.dt-off turns this off (the kill switch).
+ */
+
+html:not(.dt-off) .dt-watch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+html:not(.dt-off) .dt-watch__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+/* The bell says "tell me", and it is a glyph, so no image is loaded */
+html:not(.dt-off) .dt-watch__button::before {
+  content: "🔔";
+  font-size: 12px;
+  line-height: 1;
+  /* Off: the outline reads as "not registered yet" */
+  filter: grayscale(1);
+}
+
+html:not(.dt-off) .dt-watch__button.is-on::before {
+  filter: none;
+}
+
+html:not(.dt-off) .dt-watch__button[disabled] {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+html:not(.dt-off) .dt-watch__note {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #d84a4a;
+}
+
+/* ---------------------------------------------------------------- *
+ * In the own hero: white on dark, over the key visual
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off) .dt-hero__actions .dt-watch__button {
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+}
+
+html:not(.dt-off) .dt-hero__actions .dt-watch__button:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.8);
+}
+
+html:not(.dt-off) .dt-hero__actions .dt-watch__button.is-on {
+  border-color: #ffc65c;
+  background: rgba(255, 198, 92, 0.22);
+}
+
+html:not(.dt-off) .dt-hero__actions .dt-watch__note {
+  color: #ffb4b4;
+}
+
+/* ---------------------------------------------------------------- *
+ * In the control area of the site: dark on light
+ * ---------------------------------------------------------------- */
+
+html:not(.dt-off) .actionArea .dt-watch {
+  /* The area of the site is a row of controls, so this starts a line of its own */
+  margin-top: 8px;
+}
+
+html:not(.dt-off) .actionArea .dt-watch__button {
+  border: 1px solid #c8c8c8;
+  background: #fff;
+  color: #333;
+}
+
+html:not(.dt-off) .actionArea .dt-watch__button:hover {
+  border-color: #999;
+  background: #f4f4f4;
+}
+
+html:not(.dt-off) .actionArea .dt-watch__button.is-on {
+  border-color: #e0a020;
+  background: #fff6e2;
+  color: #7a5200;
+}
+
+/* ---------------------------------------------------------------- *
+ * The kill switch
+ *
+ * Without this rule the own button stays on the page without its style, which looks
+ * worse than the normal site.
+ * ---------------------------------------------------------------- */
+
+html.dt-off .dt-watch {
+  display: none !important;
+}
+
+@media (max-width: 900px) {
+  html:not(.dt-off) .dt-watch__button {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+}

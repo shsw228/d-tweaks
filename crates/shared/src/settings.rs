@@ -62,6 +62,9 @@ pub const SCRIPT_ID_PREFIX: &str = "dt-";
 pub const PLAYER_MODAL: &str = "player-modal";
 /// Feature that draws the comments. It needs `RULESET_NICO_UA`.
 pub const COMMENTS: &str = "comments";
+/// Feature that watches works for a new episode. It is the only feature that acts while
+/// no tab of the site is open, so the service worker tests it before it makes the alarm.
+pub const EPISODE_WATCH: &str = "episode-watch";
 
 /// Ruleset that adds `'self'` to the `frame-src` of the site, so the player page can be in
 /// an iframe. It changes a security header, so it is declared as disabled and only
@@ -107,6 +110,7 @@ pub struct FeatureDef {
 /// only needs a line here and the same text in the table.
 pub const GROUPS: &[&str] = &[
     "サイト全体",
+    "新着通知",
     "トップページ",
     "一覧",
     "作品ページ",
@@ -186,6 +190,13 @@ pub const FEATURES: &[FeatureDef] = &[
         description: "フロート再生中に、ニコニコ動画の公式配信から同じ話のコメントを取ってきて重ねます。作品名と話数で動画を突き合わせるため、見つからないこともあります。",
         // The CSS is in player-modal.css; this only appears inside the float
         css: &[],
+    },
+    FeatureDef {
+        id: "episode-watch",
+        group: "新着通知",
+        label: "登録した作品の新着を見張る",
+        description: "作品ページの「新着を見張る」で登録した作品を決めた間隔で見に行き、増えた話をツールバーのアイコンのバッジと、アイコンを押したときの一覧に出します。1 回の確認は作品 1 件あたり 1 KB 程度の問い合わせ 1 本で、増えていなければそれで終わりです。",
+        css: &["styles/episode-watch.css"],
     },
     FeatureDef {
         id: "debug-view",
@@ -269,6 +280,19 @@ pub const CHOICES: &[ChoiceDef] = &[
         description: "この拡張が出す文字の言語です。サイト本来の文字は変わりません。「自動」はブラウザの言語に合わせます。",
         options: &[("auto", "opt.auto"), ("ja", "opt.ja"), ("en", "opt.en")],
         default: "auto",
+    },
+    ChoiceDef {
+        id: WATCH_INTERVAL_KEY,
+        group: "新着通知",
+        label: "新着を見に行く間隔",
+        description: "登録した作品を見に行く間隔です。配信自体は放送から 1 日以内に来るので、既定は 6 時間おきにしています（そこから外れた配信に気づくには十分な細かさです）。何度見に行っても増えていない作品は、この間隔から自動で 2 倍ずつ延びて最長 1 日に落ち着くので、放送が終わった作品を登録したままでも問い合わせは増えません。",
+        options: &[
+            ("30", "opt.interval.30"),
+            ("60", "opt.interval.60"),
+            ("180", "opt.interval.180"),
+            ("360", "opt.interval.360"),
+        ],
+        default: "360",
     },
     ChoiceDef {
         id: DANMAKU_FPS_KEY,
@@ -366,6 +390,18 @@ pub const THUMB_SIZE_KEY: &str = "thumb-size";
 pub const UI_LANG_KEY: &str = "ui-lang";
 /// The value that keeps the image of the site.
 pub const THUMB_SIZE_OFF: &str = "off";
+/// Minutes between two checks for a new episode.
+pub const WATCH_INTERVAL_KEY: &str = "watch-interval";
+/// Six hours.
+///
+/// The service delivers an episode inside a day of its broadcast, so what a user wants to
+/// see is an episode that arrives **outside** of that day. Six hours is fine enough to show
+/// that, and it is a quarter of the requests of an hourly check.
+pub const WATCH_INTERVAL_DEFAULT: f64 = 360.0;
+/// Chrome accepts a shorter period, but the answer of the site changes on the day of a
+/// release, so nothing under this is useful and it only makes requests.
+pub const WATCH_INTERVAL_MIN: f64 = 30.0;
+pub const WATCH_INTERVAL_MAX: f64 = 1440.0;
 
 /// The id of the registration of a feature.
 pub fn script_id(feature_id: &str) -> String {
@@ -457,6 +493,17 @@ pub async fn danmaku_duration() -> f64 {
         DANMAKU_DURATION_DEFAULT,
         DANMAKU_DURATION_MIN,
         DANMAKU_DURATION_MAX,
+    )
+    .await
+}
+
+/// Minutes between two checks for a new episode.
+pub async fn watch_interval_minutes() -> f64 {
+    choice_number(
+        WATCH_INTERVAL_KEY,
+        WATCH_INTERVAL_DEFAULT,
+        WATCH_INTERVAL_MIN,
+        WATCH_INTERVAL_MAX,
     )
     .await
 }
@@ -631,6 +678,16 @@ pub const EN: &[(&str, &str, &str)] = &[
         "comments",
         "Show the comments of nicovideo",
         "While the float player runs, the comments of the same episode come from the official channel on nicovideo. The match uses the work title and the episode number, so it can find nothing.",
+    ),
+    (
+        "episode-watch",
+        "Watch the works you registered for a new episode",
+        "The works that you register with \"Watch for new episodes\" on a work page are read again at a chosen interval, and an episode that was added appears on the badge of the toolbar icon and in the list that the icon opens. One check is one request of about 1KB per work, and that is the whole check when nothing was added.",
+    ),
+    (
+        WATCH_INTERVAL_KEY,
+        "Interval of the check for a new episode",
+        "How often the works you registered are read again. The service delivers an episode inside a day of its broadcast, so the default is six hours: fine enough to show an episode that arrives outside of that day. A work that gives nothing new doubles its own wait, up to one day, so a work that ended can stay in the list without making requests.",
     ),
     (
         "debug-view",

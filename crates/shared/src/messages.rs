@@ -19,6 +19,26 @@ pub const COMMENTS: &str = "dt/comments";
 /// page load, so the worker puts the CSS into the tab of the sender.
 pub const ENABLE_NOW: &str = "dt/enable-now";
 
+/// The watch for a new episode. Every one of these is answered by the service worker,
+/// because it is the only writer of the list (see `watch`).
+///
+/// | Type | Sender | Task |
+/// |---|---|---|
+/// | `WATCH_STATE` | Work page | Is this work watched? Also resyncs the last episode |
+/// | `WATCH_ADD` | Work page | Watch this work, with the episodes that the page shows |
+/// | `WATCH_REMOVE` | Work page, popup | Stop watching this work |
+/// | `WATCH_LIST` | Popup | The list and the number of watched works |
+/// | `WATCH_SEEN` | Popup | The list was on the screen, so the badge goes away |
+/// | `WATCH_CLEAR` | Popup | Empty the list |
+/// | `WATCH_CHECK` | Popup | Check now, without waiting for the alarm |
+pub const WATCH_STATE: &str = "dt/watch-state";
+pub const WATCH_ADD: &str = "dt/watch-add";
+pub const WATCH_REMOVE: &str = "dt/watch-remove";
+pub const WATCH_LIST: &str = "dt/watch-list";
+pub const WATCH_SEEN: &str = "dt/watch-seen";
+pub const WATCH_CLEAR: &str = "dt/watch-clear";
+pub const WATCH_CHECK: &str = "dt/watch-check";
+
 /// The request for comments.
 pub struct CommentQuery<'a> {
     /// The dAnime partId. Also the key of the cache.

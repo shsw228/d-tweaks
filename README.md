@@ -24,6 +24,7 @@ The UI of the extension is in Japanese, because the service is.
 | Search | The search link of the header opens a float search that does not leave the page. Results arrive while you type. Cmd-K, Ctrl-K and `/` also open it |
 | Playback | An episode plays in a float window over the list. The control bar and the head bar are outside of the video, and the chapters give a "skip to the main story" button |
 | Comments | The comments of the same episode come from the official channel on nicovideo and are drawn over the video and in a list. When the match finds nothing, a field takes the address of a video and uses that one |
+| New episodes | A button on a work page registers the work. The extension asks every six hours whether an episode was added, and puts the number on the toolbar icon. The icon opens the list. A work that gives nothing for 30 days stops being watched |
 
 Every feature has its own switch, and one more switch stops everything without a change
 in `chrome://extensions`. With a feature off, the site looks as it always does.
@@ -57,18 +58,34 @@ just build
 After a build, reload the extension and then the page. Chrome reads the content script
 one time, when it loads the extension, so a new build needs that reload.
 
+### The toolbar icon
+
+The icon opens the list of new episodes: a setting is read one time, and a new episode is
+the reason to look again. A row has the still of the episode, its number and its subtitle,
+and it opens that episode. A button opens the settings. The popup also has "check now",
+"reload the page" and "empty the list".
+
+The line above the list counts the works that are watched, and it opens into the list of
+them: each one says when it is asked again, and has a button that stops watching it.
+
+`store/promo/popup-preview.html` draws that list with the real UI outside of the browser
+(serve the repository and open it), the same way the store image of the settings page is
+made.
+
 ### Settings
 
-The toolbar icon opens a popup. The same rows are on the options page.
+Every setting, with its description, is on the options page ("open the settings" in the
+popup, or the options entry in `chrome://extensions`).
 
 - **Master switch**: is the extension on?
-- **Features**: one switch for each of the 11 features
+- **Features**: one switch for each of the 12 features
 - **Details**: remove the rentals from the search, the skip button, the keyboard
   shortcuts of the search
-- **Lists**: the draw rate and the duration of the comments, the default sort of the
-  search, the minimum width of a card, the resolution of the thumbnails
+- **Lists**: the interval of the check for a new episode, the draw rate and the duration
+  of the comments, the default sort of the search, the minimum width of a card, the
+  resolution of the thumbnails
 
-The popup also has "reload the page" and "remove the comment cache".
+The options page also has "remove the comment cache".
 
 ### Commands
 
@@ -109,8 +126,15 @@ The rules that the code follows:
 - **Fail safe.** The original DOM is hidden and never removed, and only after the own UI
   is ready. Without the WASM, the user sees the normal site.
 - **Keep the traffic low.** Each position asks for the image size that it needs, a
-  prefetch reads one half screen ahead, and an answer that arrives twice is kept. Nothing
-  runs in the background.
+  prefetch reads one half screen ahead, and an answer that arrives twice is kept. The one
+  thing that runs without a tab is the check for a new episode, and it is one request of
+  about 1KB per work: it asks the episode interface for the last episode that it knows and
+  reads the id of the next one, instead of reading the 108KB work page. At most four
+  requests at the same time, at most twenty works per run, and a work that gives nothing
+  new doubles its own wait up to one day, and after 30 days without an episode the work is
+  not watched any more.
+  Opening a work page is a check that costs nothing, because the page already holds the
+  list.
 - **Never touch the DRM data.** The playback interface returns `laUrl`, `contentUrls`,
   `oneTimeKey`, `viewOneTimeToken` and `castContentUri`. The code does not read them.
 
@@ -161,6 +185,9 @@ such as `-rc.1` is not valid. The store never accepts the same version twice.
   appear. For an episode that the search does not find, put the address of the video into
   the field in the comment column; that choice stays for the episode, and the button next
   to the field goes back to the automatic selection.
+- The check for a new episode compares the chain of the site (`nextPartId`), so an
+  episode that the site inserts **before** the last one that is known is not reported by
+  the check. Opening the work page reads the whole list again and repairs that.
 - Playback on the same page needs `'self'` in the `frame-src` of the site, which this
   extension adds. That change is active **only while the float player is on** and goes
   away with the feature or with the master switch (`extension/rules.json`).

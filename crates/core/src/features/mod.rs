@@ -2,6 +2,7 @@ pub mod card_view;
 pub mod comments;
 pub mod controls;
 pub mod danmaku;
+pub mod episode_watch;
 pub mod frame;
 pub mod infinite_scroll;
 pub mod player_meta;

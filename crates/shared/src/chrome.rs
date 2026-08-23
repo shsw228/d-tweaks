@@ -51,6 +51,65 @@ extern "C" {
     // --- Changes of the settings. A content script also receives them. ---
     #[wasm_bindgen(js_namespace = ["chrome", "storage", "onChanged"], js_name = "addListener")]
     fn storage_on_changed_add(callback: &JsValue);
+
+    // --- alarms, for the periodic check for a new episode ---
+    #[wasm_bindgen(js_namespace = ["chrome", "alarms"], js_name = "create")]
+    fn alarms_create(name: &str, info: &JsValue);
+
+    #[wasm_bindgen(js_namespace = ["chrome", "alarms"], js_name = "get")]
+    fn alarms_get(name: &str) -> Promise;
+
+    #[wasm_bindgen(js_namespace = ["chrome", "alarms"], js_name = "clear")]
+    fn alarms_clear(name: &str) -> Promise;
+
+    // --- The badge on the toolbar icon: the number of unread new episodes ---
+    #[wasm_bindgen(js_namespace = ["chrome", "action"], js_name = "setBadgeText")]
+    fn action_set_badge_text(details: &JsValue) -> Promise;
+
+    #[wasm_bindgen(js_namespace = ["chrome", "action"], js_name = "setBadgeBackgroundColor")]
+    fn action_set_badge_background_color(details: &JsValue) -> Promise;
+}
+
+/// The period of the alarm with this name, in minutes. `None` if it does not exist.
+pub async fn alarm_period(name: &str) -> Option<f64> {
+    let alarm = JsFuture::from(alarms_get(name)).await.ok()?;
+    if alarm.is_undefined() || alarm.is_null() {
+        return None;
+    }
+    Reflect::get(&alarm, &JsValue::from_str("periodInMinutes"))
+        .ok()
+        .and_then(|value| value.as_f64())
+}
+
+/// Make (or replace) a periodic alarm.
+///
+/// `create` on a name that exists replaces the alarm and starts the period again, so the
+/// caller reads `alarm_period` first and only calls this when the period changed. Without
+/// that test, every change of a setting would postpone the next check.
+pub fn create_alarm(name: &str, period_minutes: f64, delay_minutes: f64) -> Result<(), JsValue> {
+    let info = object_from(&[
+        ("periodInMinutes", JsValue::from_f64(period_minutes)),
+        ("delayInMinutes", JsValue::from_f64(delay_minutes)),
+    ])?;
+    alarms_create(name, info.as_ref());
+    Ok(())
+}
+
+/// Remove the alarm with this name. Nothing runs while the feature is off.
+pub async fn clear_alarm(name: &str) {
+    let _ = JsFuture::from(alarms_clear(name)).await;
+}
+
+/// The text of the badge on the toolbar icon. An empty text removes the badge.
+pub async fn set_badge(text: &str, colour: &str) -> Result<(), JsValue> {
+    let details = object_from(&[("text", JsValue::from_str(text))])?;
+    JsFuture::from(action_set_badge_text(details.as_ref())).await?;
+    if text.is_empty() {
+        return Ok(());
+    }
+    let colour = object_from(&[("color", JsValue::from_str(colour))])?;
+    JsFuture::from(action_set_badge_background_color(colour.as_ref())).await?;
+    Ok(())
 }
 
 /// Listen to `chrome.storage.onChanged`.

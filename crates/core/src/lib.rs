@@ -480,6 +480,19 @@ fn install_all() -> Result<(), JsValue> {
                 }
             });
 
+            // The button that registers this work for the new-episode watch.
+            //
+            // It reads the episode list of the site, so the state of the own episode grid
+            // does not matter, and it tells the service worker what the page holds, which
+            // is a check that costs no request (see `episode_watch`).
+            wasm_bindgen_futures::spawn_local(async {
+                if !settings::is_enabled(settings::EPISODE_WATCH).await {
+                    log("新着の見張り: 設定で無効");
+                    return;
+                }
+                features::episode_watch::install().await;
+            });
+
             // The episodes as an own section. The original Swiper is hidden.
             match features::work_hero::render_episodes() {
                 Ok(true) => {}

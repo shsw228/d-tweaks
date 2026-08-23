@@ -329,6 +329,191 @@ body.compact #status {
 }
 
 /* ---------------------------------------------------------------- *
+ * The works that are watched (the popup)
+ *
+ * A `<details>`, so the count is always there and the list it counts is one click away.
+ * The browser holds the open state, so this needs no script and no stored setting.
+ * ---------------------------------------------------------------- */
+
+#watching {
+  margin: 0 0 10px;
+}
+
+#watching > summary {
+  margin: 0;
+  cursor: pointer;
+  /* The row is `list-item`, and the marker of Chrome is enough */
+  list-style-position: inside;
+}
+
+#watching > summary:hover {
+  color: var(--fg);
+}
+
+#watchingList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  /* A hundred works must not push the buttons off the popup */
+  max-height: 150px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+.watchItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.watchItem:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+.watchItem__name {
+  font-size: 0.75rem;
+  /* One line: the title of a work is longer than the popup */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* When the next request for this work goes out. The title attribute has the last episode. */
+.watchItem__next {
+  color: var(--muted);
+  font-size: 0.625rem;
+  white-space: nowrap;
+}
+
+.watchItem__stop {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.625rem;
+  cursor: pointer;
+}
+
+.watchItem__stop:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---------------------------------------------------------------- *
+ * The list of new episodes (the popup)
+ *
+ * The popup is 340px wide and the list keeps up to 200 entries, so the list scrolls
+ * inside itself: a popup as tall as the screen cannot show its own buttons.
+ * ---------------------------------------------------------------- */
+
+#news {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.newsEmpty {
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/*
+ * A row is a button: it opens the episode. A link would need the address in the markup,
+ * and the popup builds the rows from the reply of the service worker.
+ */
+.newsItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "work time"
+    "label label";
+  gap: 0 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.newsItem:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+/* Read entries stay in the list, so the unread ones need a mark of their own */
+.newsItem--unread {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/*
+ * A row with the still of the episode: the picture on the left over both lines of text.
+ * A row without one (the end of a watch, or an entry that an older version wrote) keeps the
+ * two-column grid above, so the column is not an empty space.
+ */
+.newsItem--withThumb {
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "thumb work  time"
+    "thumb label label";
+  gap: 0 10px;
+}
+
+.newsItem__thumb {
+  grid-area: thumb;
+  align-self: center;
+  width: 72px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 4px;
+  /* Until the image arrives, the row must not change height */
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+}
+
+/*
+ * The end of a watch is not an event to act on, so it is quieter than an episode row. It
+ * still opens the work page, which is where the button to register it again is.
+ */
+.newsItem--ended .newsItem__label {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.newsItem__work {
+  grid-area: work;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  /* One line: the title of a work is longer than the popup */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.newsItem__label {
+  grid-area: label;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.newsItem__time {
+  grid-area: time;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- *
  * While the extension is off
  *
  * Rows that look normal but do nothing are confusing, so they are grey. They stay

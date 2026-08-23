@@ -12,6 +12,7 @@
  * The logic is in crates/background.
  */
 import init, {
+  on_alarm,
   on_comment_cache_cleared,
   on_installed,
   on_message,
@@ -59,6 +60,18 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   ) {
     ready.then(on_comment_cache_cleared);
   }
+});
+
+/*
+ * The periodic check for a new episode.
+ *
+ * An alarm is the only way to run while no tab of the site is open: an MV3 service worker
+ * is stopped after 30 seconds without work, so a setInterval would not survive. The alarm
+ * itself is made and removed by the WASM (crates/background/src/watch.rs), which only
+ * makes one while the feature is on and a work is registered.
+ */
+chrome.alarms.onAlarm.addListener((alarm) => {
+  ready.then(() => on_alarm(alarm.name));
 });
 
 /*

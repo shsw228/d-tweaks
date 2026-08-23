@@ -5,6 +5,7 @@
   "version": "1.4.0",
   "description": "__MSG_appDesc__",
   "permissions": [
+    "alarms",
     "scripting",
     "storage",
     "declarativeNetRequestWithHostAccess"
