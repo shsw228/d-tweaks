@@ -16,7 +16,7 @@ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
 name = "d-tweaks-background"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "d-tweaks-shared",
  "js-sys",
@@ -27,7 +27,7 @@ dependencies = [
 
 [[package]]
 name = "d-tweaks-core"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "d-tweaks-shared",
  "js-sys",
@@ -38,7 +38,7 @@ dependencies = [
 
 [[package]]
 name = "d-tweaks-danmaku"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "d-tweaks-shared",
  "js-sys",
@@ -48,7 +48,7 @@ dependencies = [
 
 [[package]]
 name = "d-tweaks-options"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "d-tweaks-shared",
  "js-sys",
@@ -59,7 +59,7 @@ dependencies = [
 
 [[package]]
 name = "d-tweaks-shared"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
