@@ -1,0 +1,74 @@
+name: 不具合の報告
+description: 拡張の動きがおかしいときに使ってください
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        報告ありがとうございます。この内容は誰でも読めます。
+        スクリーンショットやログに、視聴履歴・マイリスト・アカウント名など見られたくないものが写っていないか確かめてから送ってください。
+  - type: textarea
+    id: what
+    attributes:
+      label: 起きたこと
+      description: 何をしたときに、何が起きたか
+      placeholder: 例）フロート再生を開くとコメントが流れない
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現の手順
+      description: 同じことを起こすための手順。作品名や話数が分かると調べやすくなります
+      placeholder: |
+        1. トップページを開く
+        2. 「さがす」の「新着」から作品を再生する
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 本来どうなってほしいか
+    validations:
+      required: false
+  - type: dropdown
+    id: page
+    attributes:
+      label: 起きたページ
+      options:
+        - トップページ
+        - 作品ページ
+        - 一覧（マイページ・視聴履歴など）
+        - 検索
+        - フロート再生
+        - 設定（ポップアップ・オプション）
+        - その他
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 拡張の版
+      description: chrome://extensions の d-tweaks に出ている番号
+      placeholder: 例）1.4.2
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Chrome の版と OS
+      description: chrome://version の最初の行と OS
+      placeholder: 例）Chrome 140 / macOS 26
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: コンソールのログ
+      description: |
+        分かる場合のみ。ページで右クリック →「検証」→「Console」に出る `[d-tweaks]` で始まる行を貼ってください。
+        コメントの不具合は、設定の「動画情報のデバッグ表示を出す」をオンにすると詳しい行が出ます。
+      render: text
+    validations:
+      required: false
