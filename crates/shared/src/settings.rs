@@ -271,20 +271,6 @@ pub const CHOICES: &[ChoiceDef] = &[
         default: "auto",
     },
     ChoiceDef {
-        id: DANMAKU_FPS_KEY,
-        group: "コメント",
-        label: "弾幕の描画レート",
-        description: "上げるほど滑らかに流れますが、そのぶん CPU を使います。コマ数の表示は映像基準の 24fps 固定です。",
-        // A number with a unit reads the same in both languages
-        options: &[
-            ("24", "24 fps"),
-            ("30", "30 fps"),
-            ("48", "48 fps"),
-            ("60", "60 fps"),
-        ],
-        default: "30",
-    },
-    ChoiceDef {
         id: DANMAKU_DURATION_KEY,
         group: "コメント",
         label: "弾幕が流れきる時間",
@@ -296,6 +282,19 @@ pub const CHOICES: &[ChoiceDef] = &[
             ("8", "opt.sec.slow"),
         ],
         default: "4",
+    },
+    ChoiceDef {
+        id: DANMAKU_RESOLUTION_KEY,
+        group: "コメント",
+        label: "弾幕の解像度",
+        description: "コメントの絵を作る高さの画素数です。上げると文字がくっきりしますが、絵を作るのに時間がかかり、コメントが多い場面では出るのが遅れることがあります。ニコニコ動画の公式プレイヤーは 768 です。",
+        options: &[
+            ("768", "opt.res.768"),
+            ("1080", "opt.res.1080"),
+            ("1440", "opt.res.1440"),
+            ("0", "opt.res.display"),
+        ],
+        default: "1080",
     },
     ChoiceDef {
         id: SEARCH_SORT_KEY,
@@ -340,14 +339,13 @@ pub const CHOICES: &[ChoiceDef] = &[
     },
 ];
 
-/// Draw rate of the danmaku, in fps.
-///
-/// The frame counter uses the fps of the video, so this changes only how smooth the
-/// comments move.
-pub const DANMAKU_FPS_KEY: &str = "danmaku-fps";
-pub const DANMAKU_FPS_DEFAULT: f64 = 30.0;
-pub const DANMAKU_FPS_MIN: f64 = 24.0;
-pub const DANMAKU_FPS_MAX: f64 = 60.0;
+/// Device pixels of the height of the danmaku canvas at most, or
+/// `DANMAKU_RESOLUTION_DISPLAY` for the full resolution of the screen.
+pub const DANMAKU_RESOLUTION_KEY: &str = "danmaku-resolution";
+pub const DANMAKU_RESOLUTION_DISPLAY: f64 = 0.0;
+pub const DANMAKU_RESOLUTION_DEFAULT: f64 = 1080.0;
+pub const DANMAKU_RESOLUTION_MIN: f64 = 360.0;
+pub const DANMAKU_RESOLUTION_MAX: f64 = 4320.0;
 /// Seconds for one comment to cross the screen.
 pub const DANMAKU_DURATION_KEY: &str = "danmaku-duration";
 pub const DANMAKU_DURATION_DEFAULT: f64 = 4.0;
@@ -439,15 +437,21 @@ async fn choice_number(id: &str, fallback: f64, min: f64, max: f64) -> f64 {
         .unwrap_or(fallback)
 }
 
-/// Draw rate of the danmaku.
-pub async fn danmaku_fps() -> f64 {
-    choice_number(
-        DANMAKU_FPS_KEY,
-        DANMAKU_FPS_DEFAULT,
-        DANMAKU_FPS_MIN,
-        DANMAKU_FPS_MAX,
+/// Height of the danmaku canvas in device pixels at most, or
+/// `DANMAKU_RESOLUTION_DISPLAY`.
+pub async fn danmaku_resolution() -> f64 {
+    let height = choice_number(
+        DANMAKU_RESOLUTION_KEY,
+        DANMAKU_RESOLUTION_DEFAULT,
+        0.0,
+        DANMAKU_RESOLUTION_MAX,
     )
-    .await
+    .await;
+    if height <= DANMAKU_RESOLUTION_DISPLAY {
+        DANMAKU_RESOLUTION_DISPLAY
+    } else {
+        height.max(DANMAKU_RESOLUTION_MIN)
+    }
 }
 
 /// Seconds for one comment to cross the screen.
@@ -663,14 +667,14 @@ pub const EN: &[(&str, &str, &str)] = &[
         "The language of the words that this extension shows. The words of the site do not change. \"Auto\" follows the browser.",
     ),
     (
-        DANMAKU_FPS_KEY,
-        "Draw rate of the comments",
-        "Higher is smoother and uses more CPU. The frame counter stays at the 24fps of the video.",
-    ),
-    (
         DANMAKU_DURATION_KEY,
         "Time for a comment to cross",
         "The seconds that one comment needs to cross the screen. Longer is easier to read and puts more comments on the screen at once.",
+    ),
+    (
+        DANMAKU_RESOLUTION_KEY,
+        "Resolution of the comments",
+        "The pixels of height that the pictures of the comments are made with. Higher is sharper, and takes longer to make, so a comment can come late where there are many. The player of nicovideo uses 768.",
     ),
     (
         SEARCH_SORT_KEY,

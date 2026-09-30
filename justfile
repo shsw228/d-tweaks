@@ -6,16 +6,18 @@ default: dev
 # 開発ビルド
 dev:
     @just _build-core --dev
+    @just _build-danmaku --dev
     @just _build-background --dev
     @just _build-options --dev
 
 # リリースビルド（opt-level=z + wasm-opt -Oz）
 build:
     @just _build-core --release
+    @just _build-danmaku --release
     @just _build-background --release
     @just _build-options --release
     @echo "--- 成果物 ---"
-    @ls -lh extension/pkg/core_bg.wasm extension/pkg-background/background_bg.wasm extension/pkg-options/options_bg.wasm
+    @ls -lh extension/pkg/core_bg.wasm extension/pkg-danmaku/danmaku_bg.wasm extension/pkg-background/background_bg.wasm extension/pkg-options/options_bg.wasm
 
 # content script。ES module は使えないので no-modules で出す。
 _build-core mode:
@@ -25,6 +27,15 @@ _build-core mode:
       --out-name core \
       {{mode}}
     @just _swap extension/.stage-pkg extension/pkg
+
+# 弾幕の dedicated worker。importScripts で読むので no-modules で出す。
+_build-danmaku mode:
+    wasm-pack build crates/danmaku \
+      --target no-modules \
+      --out-dir ../../extension/.stage-pkg-danmaku \
+      --out-name danmaku \
+      {{mode}}
+    @just _swap extension/.stage-pkg-danmaku extension/pkg-danmaku
 
 # service worker は "type": "module" なので web ターゲットが使える。
 _build-background mode:
@@ -109,6 +120,6 @@ fmt:
 
 clean:
     cargo clean
-    rm -rf extension/pkg extension/pkg-background extension/pkg-options
-    rm -rf extension/.stage-pkg extension/.stage-pkg-background extension/.stage-pkg-options
-    rm -rf extension/pkg.old extension/pkg-background.old extension/pkg-options.old
+    rm -rf extension/pkg extension/pkg-danmaku extension/pkg-background extension/pkg-options
+    rm -rf extension/.stage-pkg extension/.stage-pkg-danmaku extension/.stage-pkg-background extension/.stage-pkg-options
+    rm -rf extension/pkg.old extension/pkg-danmaku.old extension/pkg-background.old extension/pkg-options.old

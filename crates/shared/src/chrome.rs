@@ -48,9 +48,17 @@ extern "C" {
     #[wasm_bindgen(js_namespace = ["chrome", "runtime"], js_name = "sendMessage")]
     fn runtime_send_message(message: &JsValue) -> Promise;
 
+    #[wasm_bindgen(js_namespace = ["chrome", "runtime"], js_name = "getURL")]
+    fn runtime_get_url(path: &str) -> String;
+
     // --- Changes of the settings. A content script also receives them. ---
     #[wasm_bindgen(js_namespace = ["chrome", "storage", "onChanged"], js_name = "addListener")]
     fn storage_on_changed_add(callback: &JsValue);
+}
+
+/// The `chrome-extension://` address of a file of the extension.
+pub fn extension_url(path: &str) -> String {
+    runtime_get_url(path)
 }
 
 /// Listen to `chrome.storage.onChanged`.

@@ -540,8 +540,8 @@ async fn load(
                     video_id: &video_id,
                     video_title: &video_title,
                     video_seconds,
-                    draw_fps: settings::danmaku_fps().await,
                     duration: settings::danmaku_duration().await,
+                    max_height: settings::danmaku_resolution().await,
                     debug: settings::is_enabled("debug-view").await,
                 };
                 let handle = match danmaku::start(stage, side, frame, &comments, options) {
@@ -613,8 +613,8 @@ async fn without_comments(ctx: &Ctx) -> Option<danmaku::Handle> {
         video_id: "",
         video_title: t("comments.none"),
         video_seconds: None,
-        draw_fps: settings::danmaku_fps().await,
         duration: settings::danmaku_duration().await,
+        max_height: settings::danmaku_resolution().await,
         debug: true,
     };
     match danmaku::start(&ctx.stage, &ctx.side, &ctx.frame, &Array::new(), options) {

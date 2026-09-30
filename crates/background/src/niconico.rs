@@ -9,7 +9,7 @@
 //! | Step | Endpoint |
 //! |---|---|
 //! | 1. Search | `GET snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search` |
-//! | 2. Watch data | `GET www.nicovideo.jp/watch/{videoId}?responseType=json` gives `nvComment` |
+//! | 2. Watch data | `GET www.nicovideo.jp/watch/{videoId}?responseType=json` gives `data.response.$watchV4.data.comment.nvComment` |
 //! | 3. Comments | `POST {nvComment.server}/v1/threads` |
 //!
 //! Step 2 gives `server`, `threadKey` and `params` together, so
@@ -159,10 +159,11 @@ async fn watch_data(video_id: &str) -> Result<(VideoMeta, String, String, JsValu
     let url = format!("{WATCH_ENDPOINT}{video_id}?responseType=json");
     let json = fetch_json(request(&url, "GET", None)?).await?;
 
-    // The reply has it in data.response.comment.nvComment. Also try data.comment, in
-    // case the shape changes.
-    let nv = json::path(&json, &["data", "response", "comment", "nvComment"])
-        .or_else(|| json::path(&json, &["data", "comment", "nvComment"]))
+    // The older shape had these directly in data.response
+    let base = json::path(&json, &["data", "response", "$watchV4", "data"])
+        .or_else(|| json::path(&json, &["data", "response"]))
+        .ok_or_else(|| JsValue::from_str("watch の data.response がありません"))?;
+    let nv = json::path(&base, &["comment", "nvComment"])
         .ok_or_else(|| JsValue::from_str("nvComment が見つかりません"))?;
 
     let server = json::get_string(&nv, "server")
@@ -174,7 +175,7 @@ async fn watch_data(video_id: &str) -> Result<(VideoMeta, String, String, JsValu
 
     // The video itself. It is not necessary for the comments, so an absent field is not
     // a failure: the caller can also have the title from the search.
-    let video = json::path(&json, &["data", "response", "video"]);
+    let video = json::get(&base, "video");
     let meta = VideoMeta {
         title: video
             .as_ref()

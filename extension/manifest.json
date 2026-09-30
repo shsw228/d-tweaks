@@ -57,7 +57,12 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["pkg/core_bg.wasm"],
+      "resources": [
+        "pkg/core_bg.wasm",
+        "danmaku-worker.js",
+        "pkg-danmaku/danmaku.js",
+        "pkg-danmaku/danmaku_bg.wasm"
+      ],
       "matches": ["https://animestore.docomo.ne.jp/*"]
     }
   ],

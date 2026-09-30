@@ -1,5 +1,11 @@
 [workspace]
-members = ["crates/shared", "crates/core", "crates/background", "crates/options"]
+members = [
+  "crates/shared",
+  "crates/core",
+  "crates/danmaku",
+  "crates/background",
+  "crates/options",
+]
 resolver = "3"
 
 [workspace.package]
