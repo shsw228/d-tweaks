@@ -79,4 +79,14 @@ features = [
   "HtmlMediaElement",
   "TimeRanges",
   "DocumentFragment",
+  # 弾幕の絵は worker が作り、ページは Web Animations で動かす
+  "Worker",
+  "WorkerOptions",
+  "MessageEvent",
+  "Blob",
+  "BlobPropertyBag",
+  "Performance",
+  "Animation",
+  "ImageBitmap",
+  "ImageBitmapRenderingContext",
 ]

@@ -17,6 +17,7 @@ The extension has three layers.
 |---|---|---|---|
 | 0 | `extension/styles/*.css` | `document_start` | Layout |
 | 1 | `crates/core` (WASM) | `document_start`, then run at `DOMContentLoaded` | Read the DOM and draw the own UI |
+| 1 | `crates/danmaku` (WASM) | While the float player shows comments | Lay out the comments and draw their pictures in a dedicated worker |
 | 2 | `crates/background` (WASM) | Always | Register the CSS. Get the comments |
 
 Put the layout in layer 0. Only CSS can be ready before the first paint.
@@ -27,6 +28,7 @@ Put the layout in layer 0. Only CSS can be ready before the first paint.
 |---|---|
 | `shared` | Settings tables. Bindings for the `chrome` API |
 | `core` | Content script |
+| `danmaku` | Dedicated worker that lays out the comments and draws their pictures |
 | `background` | Service worker |
 | `options` | Settings UI for the options page and the toolbar popup |
 
@@ -36,12 +38,13 @@ modules before.
 
 ### Hand-written JavaScript
 
-WASM cannot start itself, and MV3 accepts only JavaScript at every entry point, so three
+WASM cannot start itself, and MV3 accepts only JavaScript at every entry point, so four
 files are JavaScript. All other logic is Rust.
 
 | File | Task |
 |---|---|
 | `wasm-loader.js` | Start the WASM of the content script |
+| `danmaku-worker.js` | Start the WASM of the danmaku worker |
 | `sw.js` | Add the service worker listeners |
 | `settings-loader.js` | Start the WASM of the options page and of the popup |
 
@@ -273,6 +276,43 @@ The code now keeps a copy of the index in the memory of the service worker:
 The options page can remove the cache. That page writes to the storage directly,
 so the service worker must forget the copy. `sw.js` sends
 `on_comment_cache_cleared` when the index key is removed.
+
+
+### Drawing
+
+Each comment is its own `<canvas>` with a picture, and a Web Animation of
+`transform` and `opacity` moves it (`crates/core/src/features/danmaku/layers.rs`). The
+compositor of the browser runs these animations on every frame of the display, at the
+time of that frame, without any script. Two earlier versions drew all comments on one
+canvas over the video on every frame, on the thread of the page and then in a worker.
+Both dropped frames at 120Hz: a frame callback that came late, and a canvas of the size
+of the screen that the compositor had to take on every frame (worse at a higher
+resolution).
+
+- A worker (`crates/danmaku`) gives the comments their lanes and draws each picture two
+  seconds before it is needed. One long comment in a large font takes 100 ms
+  (48 characters, 7904×241 pixels), and the layout of a few thousand comments 20 ms.
+  A comment whose picture is not there yet is left out until it arrives, and then
+  appears at its place; with the debug view on, the page writes each such comment to
+  the console. The resolution setting only changes this work: at the resolution of a
+  Retina screen the text is 140 device pixels high, and `strokeText` takes 30 to
+  130 ms for one comment.
+- The animations run on the time of the document, not of the video. `Timing` keeps
+  the smallest `now - currentTime`, because `currentTime` lags behind and never runs
+  ahead, and lets it creep up by 1 ms in a second. An estimate over a window jumped
+  when its best sample left the window.
+- Every animation is placed again only at a pause, a seek, a stall, or a change of the
+  rate or the offset. A new place is a jump of every comment on screen, which looks
+  like a stop or a step back. A drift changes the rate of the animations by up to 3%
+  until they are back with the video, as the player of nicovideo does.
+- A stall is a `currentTime` that does not move for 150 ms, or a `readyState` under
+  `HAVE_CURRENT_DATA`. `HAVE_FUTURE_DATA` falls for a moment at the edges of the
+  segments while the video plays on, and a pause for it was a visible stop.
+- A page cannot start a worker from `chrome-extension://`. A blob of the page origin
+  imports `danmaku-worker.js`, and the name of the worker carries the address of the
+  extension.
+- `Element.animate` is called through `Reflect`: web-sys has it only behind
+  `web_sys_unstable_apis`, a flag for the whole build.
 
 ## Two languages
 

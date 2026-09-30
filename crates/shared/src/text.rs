@@ -408,7 +408,6 @@ pub const WORDS: &[(&str, &str, &str)] = &[
     ("debug.ready", "読み込み", "Ready"),
     ("debug.frames", "フレーム数", "Frames"),
     ("debug.decode", "復号時間", "Decode"),
-    ("debug.draw", "弾幕描画", "Overlay"),
     ("debug.comments", "コメント", "Comments"),
     ("debug.length", "尺差", "Length"),
     ("debug.canvas", "描画面", "Canvas"),
@@ -444,11 +443,6 @@ pub const WORDS: &[(&str, &str, &str)] = &[
         "presented {presented} / {quality}",
     ),
     (
-        "debug.draw.value",
-        "設定 {set} fps / 実測 {measured}",
-        "set {set} fps / measured {measured}",
-    ),
-    (
         "debug.time.value",
         "{current} / {duration} 秒（残り {remaining}）",
         "{current} / {duration} s (left {remaining})",
@@ -477,6 +471,18 @@ pub const WORDS: &[(&str, &str, &str)] = &[
     ("opt.sec.4", "4 秒", "4 s"),
     ("opt.sec.6", "6 秒", "6 s"),
     ("opt.sec.slow", "8 秒（ゆっくり）", "8 s (slow)"),
+    (
+        "opt.res.768",
+        "768（公式と同じ・軽い）",
+        "768 (as nicovideo, light)",
+    ),
+    ("opt.res.1080", "1080", "1080"),
+    ("opt.res.1440", "1440", "1440"),
+    (
+        "opt.res.display",
+        "画面に合わせる（重い）",
+        "Match the screen (heavy)",
+    ),
     ("opt.sort.relevance", "関連度順", "By relevance"),
     ("opt.sort.plays", "再生数順", "By plays"),
     ("opt.sort.favorites", "気になる登録数順", "By favorites"),

@@ -37,6 +37,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "d-tweaks-danmaku"
+version = "1.4.0"
+dependencies = [
+ "d-tweaks-shared",
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "d-tweaks-options"
 version = "1.4.0"
 dependencies = [

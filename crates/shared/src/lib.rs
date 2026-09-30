@@ -3,6 +3,7 @@
 
 pub mod cache_keys;
 pub mod chrome;
+pub mod danmaku;
 pub mod json;
 pub mod messages;
 pub mod nicovideo;

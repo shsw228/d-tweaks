@@ -65,8 +65,8 @@ The toolbar icon opens a popup. The same rows are on the options page.
 - **Features**: one switch for each of the 11 features
 - **Details**: remove the rentals from the search, the skip button, the keyboard
   shortcuts of the search
-- **Lists**: the draw rate and the duration of the comments, the default sort of the
-  search, the minimum width of a card, the resolution of the thumbnails
+- **Lists**: the duration and the resolution of the comments, the default sort of
+  the search, the minimum width of a card, the resolution of the thumbnails
 
 The popup also has "reload the page" and "remove the comment cache".
 

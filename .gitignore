@@ -6,10 +6,12 @@
 /dist
 # wasm-pack の生成物（just build で再生成する）
 /extension/pkg
+/extension/pkg-danmaku
 /extension/pkg-background
 /extension/pkg-options
 # ビルド中の一時置き場と入れ替え前の退避（_swap が使う）
 /extension/.stage-pkg*
 /extension/pkg.old
+/extension/pkg-danmaku.old
 /extension/pkg-background.old
 /extension/pkg-options.old

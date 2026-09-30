@@ -1,0 +1,42 @@
+[package]
+name = "d-tweaks-danmaku"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "弾幕を OffscreenCanvas に描く dedicated worker"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = [
+  "-Oz",
+  "--enable-bulk-memory",
+  "--enable-bulk-memory-opt",
+  "--enable-nontrapping-float-to-int",
+  "--enable-reference-types",
+  "--enable-sign-ext",
+  "--enable-mutable-globals",
+  "--enable-multivalue",
+]
+
+[package.metadata.wasm-pack.profile.dev]
+wasm-opt = false
+
+[dependencies]
+d-tweaks-shared = { path = "../shared" }
+wasm-bindgen.workspace = true
+js-sys.workspace = true
+
+[dependencies.web-sys]
+workspace = true
+features = [
+  "DedicatedWorkerGlobalScope",
+  "WorkerGlobalScope",
+  "Performance",
+  "OffscreenCanvas",
+  "OffscreenCanvasRenderingContext2d",
+  "ImageBitmap",
+  "TextMetrics",
+]
