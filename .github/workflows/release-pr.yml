@@ -119,8 +119,11 @@ jobs:
             "マージ後に release が同じ検証を通してから公開します。")
           body="${notes}${note}"
 
-          if gh pr view "${branch}" >/dev/null 2>&1; then
-            gh pr edit "${branch}" --title "[chore] Release ${VERSION}" --body "${body}"
+          # Only an open pull request: `gh pr view <branch>` also finds a closed one of the
+          # same version, edits it, and no pull request is open.
+          open=$(gh pr list --head "${branch}" --state open --json number --jq '.[0].number // empty')
+          if [ -n "${open}" ]; then
+            gh pr edit "${open}" --title "[chore] Release ${VERSION}" --body "${body}"
           else
             gh pr create --base main --head "${branch}" --title "[chore] Release ${VERSION}" --body "${body}"
           fi
