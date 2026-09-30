@@ -24,7 +24,7 @@ WHAT IT CHANGES
 
 SETTINGS
 
-The toolbar icon opens a popup, and the same rows are on the options page: a switch per feature, the draw rate and the duration of the comments, the smallest width of a card, the resolution of the thumbnails, the default order of the search, and the language of this extension (Japanese or English). A change is saved at once.
+The toolbar icon opens a popup, and the same rows are on the options page: a switch per feature, the duration and the resolution of the comments, the smallest width of a card, the resolution of the thumbnails, the default order of the search, and the language of this extension (Japanese or English). A change is saved at once.
 
 PLEASE NOTE
 
