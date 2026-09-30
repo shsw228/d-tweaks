@@ -10,7 +10,7 @@
  *
  * The original DOM is hidden and not removed: only `.l-section.dt-top-rendered` is hidden, so
  * without the WASM the top page of the site stays. A slider that is not 16:9 (the covers of
- * the books, the four-image tiles of a my-list) is not used, so it also stays.
+ * the books) is not used, so it also stays.
  *
  * The inside of a card comes from list-grid.css: a card is the same `.dt-card`
  * (`card_view::render`), so this file has only the frame and the hover. The rules need the
@@ -34,6 +34,22 @@ html:not(.dt-off) .l-section.dt-top-rendered {
 }
 
 /*
+ * A section that the site has not filled yet. The JS of the site fills it when its wrapper
+ * comes near the screen, so it must keep a place in the page: `display: none` would never be
+ * filled. Out of the flow and one pixel high, it lies under the own page, and it is filled
+ * when the user comes to "find" (top_page.rs, `watch`).
+ */
+html:not(.dt-off) .l-section.dt-top-pending {
+  position: absolute !important;
+  left: 0;
+  width: 100%;
+  height: 1px !important;
+  overflow: hidden !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/*
  * Hide the sliders of the site until the own page is built.
  *
  * The items of a slider are not in the HTML from the server (measured: that HTML has zero
@@ -45,7 +61,8 @@ html:not(.dt-off) .l-section.dt-top-rendered {
  * `.dt-top` is inserted, this rule stops, and then:
  *
  *   - a slider that was used stays hidden through the `display: none` of `.dt-top-rendered`,
- *   - a slider that was not used (the books, the my-lists) appears.
+ *   - a slider that is still empty stays out of sight through `.dt-top-pending`,
+ *   - a slider that was not used (the books) appears.
  *
  * So everything appears at the same moment.
  *
