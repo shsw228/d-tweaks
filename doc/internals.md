@@ -163,7 +163,10 @@ assumptions are also in a CSS file, and they must not drift:
   own UI carries the mark.
 
 The site is not an SPA, but some pages insert their cards with JavaScript after the
-first paint. A `MutationObserver` (lists) and a poll (top page) catch those.
+first paint. A `MutationObserver` (lists) and a poll (top page) catch those. The top page
+fills a section only when it comes near the screen, so after the build a
+`MutationObserver` also takes the sections that are filled later into "find". An empty
+section stays out of sight with a place under the own page, so the site still fills it.
 
 The page kind comes from the path (`crates/core/src/page.rs`). The site also puts a
 class on `<html>`, but its JavaScript adds that later, so layer 0 cannot use it.

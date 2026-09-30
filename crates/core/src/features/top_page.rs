@@ -51,8 +51,20 @@
 //! A section that this module used gets `dt-top-rendered`, and the CSS hides only
 //! those. If the WASM does not run, the top page of the site stays complete.
 //!
-//! Nothing that is not 16:9 is read (the covers of the books, the four-image tiles
-//! of a my-list), so those sliders stay as they are (see `parse_item`).
+//! Nothing that is not 16:9 is read (the covers of the books), so those sliders stay
+//! as they are (see `parse_item`). A shared my-list shows four works in one tile; its
+//! card has the image of the first one.
+//!
+//! # The sections arrive late
+//!
+//! Every section of the site is in a `section.lazy-content`, and the JS of the site
+//! fills it only when it comes near the screen (`IntersectionObserver` with a margin of
+//! one screen). The build happens once, so a section below it was empty then and
+//! stayed on the page as a slider of the site. After the build a `MutationObserver`
+//! takes every section that gets its items into "find" (`watch`). An empty section is
+//! out of sight but keeps a place under the own page, so that the site still fills it
+//! when the user comes near. A section that gives no card is written to the console,
+//! so a change of the site shows there.
 //!
 //! The favorite control (`input.favo`) is in the original DOM. 300 own buttons
 //! would be too expensive, so this page has no heart (the work page has one).
@@ -64,7 +76,10 @@ use std::rc::Rc;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{Document, Element, HtmlAnchorElement, HtmlElement, MouseEvent, Url};
+use web_sys::{
+    Document, Element, HtmlAnchorElement, HtmlElement, MouseEvent, MutationObserver,
+    MutationObserverInit, Url,
+};
 
 use d_tweaks_shared::settings;
 use d_tweaks_shared::text::{t, t_fill};
@@ -81,6 +96,13 @@ const SLIDER_SELECTOR: &str = ".p-slider__itemList";
 const ITEM_SELECTOR: &str = ".p-slider__item";
 /// Marks a section that was used. The CSS hides it.
 const RENDERED_CLASS: &str = "dt-top-rendered";
+/// A section of the site that has no items yet (see `watch`).
+const PENDING_CLASS: &str = "dt-top-pending";
+/// A section that gives no card; it stays as the site made it, and is logged once.
+const SKIPPED_ATTR: &str = "data-dt-skipped";
+/// Time between the mutations of the site and a look at the sections. The site
+/// appends the items of a section in one step; this only puts many steps together.
+const WATCH_DELAY_MS: i32 = 200;
 const ROOT_CLASS: &str = "dt-top";
 /// Size for a grid card: 208x117, exactly the 210x118 frame of the site.
 const CARD_THUMB_SIZE: &str = "6";
@@ -160,10 +182,16 @@ struct Section {
 /// A section with only those gives no card, and the slider of the site stays. That
 /// is correct.
 fn parse_item(item: &Element) -> Option<(Card, Option<String>)> {
-    for selector in [".c-thumbnail.isBook", ".c-fourImages"] {
-        if item.query_selector(selector).ok().flatten().is_some() {
-            return None;
-        }
+    if let Some(block) = item.query_selector(".p-mylistBlock").ok().flatten() {
+        return parse_mylist(&block).map(|card| (card, None));
+    }
+    if item
+        .query_selector(".c-thumbnail.isBook")
+        .ok()
+        .flatten()
+        .is_some()
+    {
+        return None;
     }
 
     // Destination: data-link, then this element as an <a>, then an <a> inside
@@ -249,6 +277,37 @@ fn parse_item(item: &Element) -> Option<(Card, Option<String>)> {
     Some((card, attr(item, "data-workexp")))
 }
 
+/// A shared my-list ("ファン厳選おすすめアニメ"): a tile of four works, the name of the
+/// list with its count, and the name of the user. The card has the image of the first
+/// work and goes to the list.
+fn parse_mylist(block: &Element) -> Option<Card> {
+    let href = block
+        .query_selector("a.p-mylistBlock__contentWrapper[href]")
+        .ok()??
+        .dyn_into::<HtmlAnchorElement>()
+        .ok()?
+        .href();
+    let name = text_of(block, ".p-infoArea__title")?;
+    let thumb = block
+        .query_selector(".c-fourImages__item:not(.isNoImage)")
+        .ok()
+        .flatten()
+        .and_then(|img| attr(&img, "data-src").or_else(|| attr(&img, "src")))
+        .filter(|src| !src.contains("lazySpace") && !src.contains("loading"));
+    Some(Card {
+        link: Some(card_view::Link::External(href)),
+        work: Some(name),
+        number: text_of(block, ".p-infoArea__userName"),
+        title: None,
+        thumb,
+        watched: false,
+        progress: None,
+        badges: Vec::new(),
+        // A key visual has no size in its name, so nothing to change
+        thumb_size: None,
+    })
+}
+
 /// The episode number, as `第6話`.
 ///
 /// `.c-infoDetails__onAirRange` holds it, but the measurement gives three forms:
@@ -281,12 +340,36 @@ fn episode_label(
     Some(format!("第{number}話"))
 }
 
-/// The role, from the title.
-fn role_of(title: &str) -> Role {
-    if title.contains("放送中") {
-        Role::OnAir
-    } else if title.contains("ランキング") {
+/// The role of a section.
+///
+/// The words of a title change with the season and the campaign, so they are the last
+/// test. The id of the wrapper of the site (`section#onair`, `section#ranking`,
+/// measured in the HTML of `tp_pc`) comes first, then the rank of the ranking items
+/// (`.c-infoDetails__rank`, from `toppage.js`).
+fn role_of(section: &Element, title: &str) -> Role {
+    let wrapper = section
+        .closest("section[id]")
+        .ok()
+        .flatten()
+        .map(|el| el.id());
+    let ranked = section
+        .query_selector(".c-infoDetails__rank")
+        .ok()
+        .flatten()
+        .is_some();
+    role_from(wrapper.as_deref(), ranked, title)
+}
+
+fn role_from(wrapper: Option<&str>, ranked: bool, title: &str) -> Role {
+    match wrapper {
+        Some("onair") => return Role::OnAir,
+        Some("ranking") => return Role::Ranking,
+        _ => {}
+    }
+    if ranked || title.contains("ランキング") {
         Role::Ranking
+    } else if title.contains("放送中") {
+        Role::OnAir
     } else {
         Role::Browse
     }
@@ -377,7 +460,7 @@ fn parse_section(section: &Element) -> Option<Section> {
     let title = text_of(section, ".p-title__text").unwrap_or_else(|| t("top.other").to_string());
     let (items, exps) = parsed.into_iter().unzip();
     Some(Section {
-        role: role_of(&title),
+        role: role_of(section, &title),
         title,
         note: text_of(section, ".p-title__subText"),
         all_href,
@@ -781,90 +864,126 @@ fn render_row(
 
 /// The other sections as one grid with chips, in place of 10 sliders of the same
 /// shape. Only the selected chip is drawn, so only its images are loaded.
-fn render_browse(document: &Document, sections: Rc<Vec<Section>>) -> Result<Element, JsValue> {
-    let root = element(document, "section", "dt-top__browse")?;
-    let head = head_of(document, t("top.browse"), None, None)?;
-    root.append_child(&head)?;
+///
+/// `add` puts a section in later (see `watch`). Without a section the block is hidden.
+struct Browse {
+    root: Element,
+    chips: Element,
+    sections: Rc<RefCell<Vec<Section>>>,
+    draw: Rc<dyn Fn(usize)>,
+}
 
-    let chips = element(document, "div", "dt-top__chips")?;
-    let body = element(document, "div", "dt-top__browseBody")?;
+impl Browse {
+    fn new(document: &Document, initial: Vec<Section>) -> Result<Self, JsValue> {
+        let root = element(document, "section", "dt-top__browse")?;
+        let head = head_of(document, t("top.browse"), None, None)?;
+        root.append_child(&head)?;
 
-    // A click on any chip builds this container again
-    let draw = {
-        let body = body.clone();
-        let chips_for_draw = chips.clone();
-        let sections = Rc::clone(&sections);
-        Rc::new(move |index: usize| {
-            let Some(document) = web_sys::window().and_then(|w| w.document()) else {
-                return;
-            };
-            let Some(section) = sections.get(index) else {
-                return;
-            };
-            body.set_inner_html("");
+        let chips = element(document, "div", "dt-top__chips")?;
+        let body = element(document, "div", "dt-top__browseBody")?;
+        let sections: Rc<RefCell<Vec<Section>>> = Rc::new(RefCell::new(Vec::new()));
 
-            // Mark the chip that is selected
-            let mut chip = chips_for_draw.first_element_child();
-            let mut position = 0usize;
-            while let Some(current) = chip {
-                let _ = if position == index {
-                    current.class_list().add_1("is-on")
-                } else {
-                    current.class_list().remove_1("is-on")
+        // A click on any chip builds this container again
+        let draw: Rc<dyn Fn(usize)> = {
+            let body = body.clone();
+            let chips_for_draw = chips.clone();
+            let sections = Rc::clone(&sections);
+            Rc::new(move |index: usize| {
+                let Some(document) = web_sys::window().and_then(|w| w.document()) else {
+                    return;
                 };
-                chip = current.next_element_sibling();
-                position += 1;
-            }
+                let sections = sections.borrow();
+                let Some(section) = sections.get(index) else {
+                    return;
+                };
+                body.set_inner_html("");
 
-            let Ok(grid) = element(&document, "div", "dt-top__grid") else {
-                return;
-            };
-            let shown = shown_count(section.items.len(), INITIAL_ITEMS);
-            if let Err(err) = append_cards(&document, &grid, &section.items, 0, shown, false) {
-                log(&format!("トップの描画に失敗: {err:?}"));
-                return;
-            }
-            let _ = body.append_child(&grid);
+                // Mark the chip that is selected
+                let mut chip = chips_for_draw.first_element_child();
+                let mut position = 0usize;
+                while let Some(current) = chip {
+                    let _ = if position == index {
+                        current.class_list().add_1("is-on")
+                    } else {
+                        current.class_list().remove_1("is-on")
+                    };
+                    chip = current.next_element_sibling();
+                    position += 1;
+                }
 
-            if section.items.len() > shown
-                && let Ok(button) = more_button(&document, &grid, &section.items, shown, false)
-            {
-                let _ = body.append_child(&button);
-            }
-            if let Some(href) = &section.all_href
-                && let Ok(link) = element(&document, "a", "dt-top__all")
-            {
-                let _ = link.set_attribute("href", href);
-                link.set_text_content(Some(t("top.list.all")));
-                let _ = body.append_child(&link);
-            }
-        })
-    };
+                let Ok(grid) = element(&document, "div", "dt-top__grid") else {
+                    return;
+                };
+                let shown = shown_count(section.items.len(), INITIAL_ITEMS);
+                if let Err(err) = append_cards(&document, &grid, &section.items, 0, shown, false) {
+                    log(&format!("トップの描画に失敗: {err:?}"));
+                    return;
+                }
+                let _ = body.append_child(&grid);
 
-    for (index, section) in sections.iter().enumerate() {
+                if section.items.len() > shown
+                    && let Ok(button) = more_button(&document, &grid, &section.items, shown, false)
+                {
+                    let _ = body.append_child(&button);
+                }
+                if let Some(href) = &section.all_href
+                    && let Ok(link) = element(&document, "a", "dt-top__all")
+                {
+                    let _ = link.set_attribute("href", href);
+                    link.set_text_content(Some(t("top.list.all")));
+                    let _ = body.append_child(&link);
+                }
+            })
+        };
+
+        root.append_child(&chips)?;
+        root.append_child(&body)?;
+        root.set_attribute("hidden", "")?;
+        let browse = Self {
+            root,
+            chips,
+            sections,
+            draw,
+        };
+        for section in initial {
+            browse.add(document, section)?;
+        }
+        Ok(browse)
+    }
+
+    /// One more chip. The first one opens.
+    fn add(&self, document: &Document, section: Section) -> Result<(), JsValue> {
+        let index = {
+            let mut sections = self.sections.borrow_mut();
+            sections.push(section);
+            sections.len() - 1
+        };
         let chip = element(document, "button", "dt-top__chip")?;
         chip.set_attribute("type", "button")?;
-        chip.set_text_content(Some(&section.title));
-        let draw = Rc::clone(&draw);
+        chip.set_text_content(Some(&self.sections.borrow()[index].title));
+        let draw = Rc::clone(&self.draw);
         let on_click = Closure::<dyn FnMut(MouseEvent)>::new(move |_| draw(index));
         chip.add_event_listener_with_callback("click", on_click.as_ref().unchecked_ref())?;
         on_click.forget();
-        chips.append_child(&chip)?;
+        self.chips.append_child(&chip)?;
+        if index == 0 {
+            self.root.remove_attribute("hidden")?;
+            (self.draw)(0);
+        }
+        Ok(())
     }
-
-    root.append_child(&chips)?;
-    root.append_child(&body)?;
-    // Open the first chip
-    draw(0);
-    Ok(root)
 }
 
 /// Build the own top page from the sections and insert it before `anchor`.
-fn build(document: &Document, sections: Vec<Section>, anchor: &Element) -> Result<(), JsValue> {
+fn build(document: &Document, sections: Vec<Section>, anchor: &Element) -> Result<Browse, JsValue> {
     let root = element(document, "div", ROOT_CLASS)?;
 
-    let onair = sections.iter().find(|s| s.role == Role::OnAir);
-    let ranking = sections.iter().find(|s| s.role == Role::Ranking);
+    // One of each role has its own block; a second one is a chip like the others, not
+    // lost
+    let onair_index = sections.iter().position(|s| s.role == Role::OnAir);
+    let ranking_index = sections.iter().position(|s| s.role == Role::Ranking);
+    let onair = onair_index.map(|i| &sections[i]);
+    let ranking = ranking_index.map(|i| &sections[i]);
 
     // The showcase is the ranking, so the ranking is not a block of its own. A page
     // without a ranking uses the first section.
@@ -884,24 +1003,25 @@ fn build(document: &Document, sections: Vec<Section>, anchor: &Element) -> Resul
         root.append_child(&row)?;
     }
 
-    let browse: Vec<Section> = sections
+    let rest: Vec<Section> = sections
         .into_iter()
-        .filter(|s| s.role == Role::Browse)
+        .enumerate()
+        .filter(|(i, _)| Some(*i) != onair_index && Some(*i) != ranking_index)
+        .map(|(_, s)| s)
         .collect();
-    if !browse.is_empty() {
-        let view = render_browse(document, Rc::new(browse))?;
-        root.append_child(&view)?;
-    }
+    let browse = Browse::new(document, rest)?;
+    root.append_child(&browse.root)?;
 
     let parent = anchor
         .parent_element()
         .ok_or_else(|| JsValue::from_str("no parent"))?;
     parent.insert_before(&root, Some(anchor))?;
-    Ok(())
+    Ok(browse)
 }
 
-/// Build the top page. Returns the number of sections that were used.
-pub fn render() -> Result<u32, JsValue> {
+/// Build the top page. Returns the number of sections that were used, and "find" for the
+/// sections that come later.
+fn render() -> Result<Option<(u32, Browse)>, JsValue> {
     let document = web_sys::window()
         .and_then(|w| w.document())
         .ok_or_else(|| JsValue::from_str("no document"))?;
@@ -911,7 +1031,7 @@ pub fn render() -> Result<u32, JsValue> {
         .query_selector(&format!(".{ROOT_CLASS}"))?
         .is_some()
     {
-        return Ok(0);
+        return Ok(None);
     }
 
     let nodes = document.query_selector_all(SECTION_SELECTOR)?;
@@ -943,17 +1063,116 @@ pub fn render() -> Result<u32, JsValue> {
 
     // Fewer than two sliders means the site has not finished; wait
     if sections.len() < MIN_SECTIONS {
-        return Ok(0);
+        return Ok(None);
     }
 
     let Some(anchor) = anchor else {
-        return Ok(0);
+        return Ok(None);
     };
-    build(&document, sections, &anchor)?;
+    let browse = build(&document, sections, &anchor)?;
     for section in &used {
         section.class_list().add_1(RENDERED_CLASS)?;
     }
-    Ok(used.len() as u32)
+    Ok(Some((used.len() as u32, browse)))
+}
+
+/// Take the sections that the site fills after the build (see the module docs).
+fn watch(browse: Browse) -> Result<(), JsValue> {
+    let document = web_sys::window()
+        .and_then(|w| w.document())
+        .ok_or_else(|| JsValue::from_str("no document"))?;
+    let body = document
+        .body()
+        .ok_or_else(|| JsValue::from_str("no body"))?;
+    let browse = Rc::new(browse);
+    let scheduled = Rc::new(Cell::new(false));
+
+    let look: Rc<dyn Fn()> = {
+        let browse = Rc::clone(&browse);
+        let scheduled = Rc::clone(&scheduled);
+        Rc::new(move || {
+            scheduled.set(false);
+            if let Err(err) = take_late_sections(&browse) {
+                log(&format!(
+                    "トップ: 後から来た帯を取り込めませんでした: {err:?}"
+                ));
+            }
+        })
+    };
+    look();
+
+    let callback = Closure::<dyn FnMut()>::new(move || {
+        if scheduled.replace(true) {
+            return;
+        }
+        let look = Rc::clone(&look);
+        let later = Closure::once_into_js(move || look());
+        if let Some(window) = web_sys::window() {
+            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                later.unchecked_ref(),
+                WATCH_DELAY_MS,
+            );
+        }
+    });
+    let observer = MutationObserver::new(callback.as_ref().unchecked_ref())?;
+    let options = MutationObserverInit::new();
+    options.set_child_list(true);
+    options.set_subtree(true);
+    observer.observe_with_options(&body, &options)?;
+    // Both live as long as the page
+    callback.forget();
+    std::mem::forget(observer);
+    Ok(())
+}
+
+/// One look at the sections that are not used yet.
+fn take_late_sections(browse: &Browse) -> Result<(), JsValue> {
+    let document = web_sys::window()
+        .and_then(|w| w.document())
+        .ok_or_else(|| JsValue::from_str("no document"))?;
+    let nodes = document.query_selector_all(&format!(
+        "{SECTION_SELECTOR}:not(.{RENDERED_CLASS}):not([{SKIPPED_ATTR}])"
+    ))?;
+    for index in 0..nodes.length() {
+        let Some(section) = nodes
+            .item(index)
+            .and_then(|node| node.dyn_into::<Element>().ok())
+        else {
+            continue;
+        };
+        let has_items = section.query_selector(ITEM_SELECTOR)?.is_some();
+        // The site fills it when it comes near the screen
+        if !has_items && section.query_selector(".p-title__text")?.is_some() {
+            section.class_list().add_1(PENDING_CLASS)?;
+            continue;
+        }
+        section.class_list().remove_1(PENDING_CLASS)?;
+        if !has_items {
+            continue;
+        }
+        if rental_filter_ready() && is_rental_section(&section) {
+            section.class_list().add_1(RENDERED_CLASS)?;
+            continue;
+        }
+        match parse_section(&section) {
+            Some(parsed) => {
+                log(&format!(
+                    "トップ: 後から埋まった「{}」を「さがす」に加えました",
+                    parsed.title
+                ));
+                browse.add(&document, parsed)?;
+                section.class_list().add_1(RENDERED_CLASS)?;
+            }
+            None => {
+                section.set_attribute(SKIPPED_ATTR, "")?;
+                let title = text_of(&section, ".p-title__text").unwrap_or_default();
+                log(&format!(
+                    "トップ: 「{title}」はカードにできる項目がない（本の表紙など）ので、サイトの表示のまま残します"
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Wait for the items and build at once.
@@ -988,11 +1207,16 @@ pub async fn install() {
 
             if stable >= SETTLE_TICKS || waited >= SETTLE_MAX_MS {
                 match render() {
-                    Ok(0) => {}
-                    Ok(count) => {
+                    Ok(None) => {}
+                    Ok(Some((count, browse))) => {
                         log(&format!(
                             "トップを組み替えました（元セクション {count} 本 / 待ち {waited}ms）"
                         ));
+                        if let Err(err) = watch(browse) {
+                            log(&format!(
+                                "トップ: 後から来る帯を見張れませんでした: {err:?}"
+                            ));
+                        }
                         return;
                     }
                     Err(err) => log(&format!("トップの組み替えに失敗: {err:?}")),
@@ -1037,7 +1261,22 @@ fn ready_counts() -> (usize, u32) {
 
 #[cfg(test)]
 mod tests {
-    use super::episode_label;
+    use super::{Role, episode_label, role_from};
+
+    /// The wrapper of the site decides before the words of the title.
+    #[test]
+    fn the_role_does_not_depend_on_the_title() {
+        assert!(role_from(Some("onair"), false, "今期のアニメ") == Role::OnAir);
+        assert!(role_from(Some("ranking"), false, "人気の作品") == Role::Ranking);
+        // A ranking with another wrapper still has ranks
+        assert!(role_from(Some("event1"), true, "特集") == Role::Ranking);
+        // A campaign whose title has a word of another role is still a chip
+        assert!(
+            role_from(Some("event2"), false, "【中秋の名月】月にまつわるアニメ") == Role::Browse
+        );
+        // Without the wrapper the title is the last test
+        assert!(role_from(None, false, "現在放送中のアニメ") == Role::OnAir);
+    }
 
     #[test]
     fn uses_the_sites_label_when_it_is_usable() {
