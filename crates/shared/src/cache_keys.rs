@@ -19,7 +19,8 @@ pub const VIDEO_ROOT: &str = "dt:vid:";
 ///   most comments), and that stayed for 30 days.
 /// - Another episode was correct, but a "not found" of an earlier version stayed for one
 ///   day.
-pub const VIDEO_PREFIX: &str = "dt:vid:v2:";
+/// - v3: the work `彼方から` was matched inside the subtitle of another work.
+pub const VIDEO_PREFIX: &str = "dt:vid:v3:";
 
 /// The video that the user gave for an episode, by its address.
 ///

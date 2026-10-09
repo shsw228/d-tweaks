@@ -23,6 +23,14 @@
 //!
 //! One episode can have more than one video. Measured: two per episode, with and
 //! without brackets around the subtitle. The one with more comments wins.
+//!
+//! # The work title comes before the episode number
+//!
+//! A short work title can be inside the subtitle of another work. Measured: the work
+//! `彼方から` got the comments of `戦姫絶唱シンフォギアＸＶ　EPISODE 01「人類史の彼方から」`,
+//! because `EPISODE 01` is an episode number and the title contained `彼方から`. The
+//! channel writes the work title first, so only the text before the episode number may
+//! hold it.
 
 /// What the selection needs from a video of the search.
 pub struct Candidate {
@@ -158,14 +166,16 @@ fn normalize_for_compare(input: &str) -> String {
 /// A text match on those fails although the titles agree, and then there are no
 /// comments. Not used for the episode number, so a sequence of digits stays as it is.
 fn normalize_loose(input: &str) -> String {
-    const DROP: [char; 16] = [
-        '「', '」', '『', '』', '（', '）', '(', ')', '【', '】', '〈', '〉', '《', '》', '[', ']',
-    ];
     normalize_for_compare(input)
         .chars()
-        .filter(|c| !DROP.contains(c))
+        .filter(|c| !LOOSE_DROP.contains(c))
         .collect()
 }
+
+/// The brackets that `normalize_loose` removes.
+const LOOSE_DROP: [char; 16] = [
+    '「', '」', '『', '』', '（', '）', '(', ')', '【', '】', '〈', '〉', '《', '》', '[', ']',
+];
 
 /// The number of a label (`"第363話"` gives `Some(363)`). Not for a kanji number.
 pub fn episode_number(label: &str) -> Option<u32> {
@@ -181,7 +191,9 @@ pub fn episode_number(label: &str) -> Option<u32> {
 ///
 /// Takes the 6 of `第6話`, `第6回`, `#6`, `Episode 6` and `6話`, but not the 4 of
 /// `シーズン4` and not a number of a subtitle.
-fn title_episode_numbers(title: &str) -> Vec<u32> {
+fn title_episode_numbers(title: &str) -> Vec<(u32, usize)> {
+    // `to_ascii_lowercase` keeps the number of characters, so a position is also one of
+    // `normalize_for_compare(title)`
     let normalized = normalize_for_compare(title).to_ascii_lowercase();
     let chars: Vec<char> = normalized.chars().collect();
     let mut numbers = Vec::new();
@@ -202,21 +214,22 @@ fn title_episode_numbers(title: &str) -> Vec<u32> {
 
         // Is the text before it an episode marker?
         let before: String = chars[..start].iter().collect();
-        let leads = before.ends_with('第')
-            || before.ends_with('#')
-            || before.ends_with("episode")
-            || before.ends_with("ep")
-            || before.ends_with("no.");
+        let lead = ["第", "#", "episode", "ep", "no."]
+            .iter()
+            .find(|marker| before.ends_with(*marker));
         // Is the text after it an episode marker?
         let trails = matches!(chars.get(index), Some('話') | Some('回'));
-        if leads || trails {
-            numbers.push(number);
+        if let Some(marker) = lead {
+            numbers.push((number, start - marker.chars().count()));
+        } else if trails {
+            numbers.push((number, start));
         }
     }
     numbers
 }
 
-/// Is the candidate the same episode?
+/// Where the episode number of `episode_label` starts in the title, as a character
+/// index of `normalize_for_compare(title)`. `None` if the title is another episode.
 ///
 /// 1. A label that is written as an episode number (`第十四回`) is compared as text.
 ///    Only this finds a kanji number.
@@ -224,22 +237,38 @@ fn title_episode_numbers(title: &str) -> Vec<u32> {
 ///    written as an episode number.
 ///
 /// A bare number is never used for a text match (see the head of this module).
-pub fn title_matches_episode(title: &str, episode_label: &str) -> bool {
+fn episode_position(title: &str, episode_label: &str) -> Option<usize> {
     let label_n = normalize_for_compare(episode_label);
     if label_n.is_empty() {
-        return false;
+        return None;
     }
+    let normalized = normalize_for_compare(title);
 
     // A label of only digits (`6`) is inside 第16話, so it is not a text match
     let bare_number = label_n.chars().all(|c| c.is_ascii_digit());
-    if !bare_number && normalize_for_compare(title).contains(&label_n) {
-        return true;
+    if !bare_number && let Some(byte) = normalized.find(&label_n) {
+        return Some(normalized[..byte].chars().count());
     }
 
-    let Some(number) = episode_number(episode_label) else {
-        return false;
-    };
-    title_episode_numbers(title).contains(&number)
+    let number = episode_number(episode_label)?;
+    title_episode_numbers(title)
+        .into_iter()
+        .find(|(n, _)| *n == number)
+        .map(|(_, position)| position)
+}
+
+#[cfg(test)]
+fn episode_matches(title: &str, episode_label: &str) -> bool {
+    episode_position(title, episode_label).is_some()
+}
+
+/// The part of the title before the episode number, in the form of `normalize_loose`.
+fn head_before(title: &str, position: usize) -> String {
+    normalize_for_compare(title)
+        .chars()
+        .take(position)
+        .filter(|c| !LOOSE_DROP.contains(c))
+        .collect()
 }
 
 /// The word for the season of a work title.
@@ -334,8 +363,7 @@ pub fn pick<'a>(candidates: &'a [Candidate], want: &Want<'_>) -> Option<&'a Cand
         }
         let title = normalize_loose(&candidate.title);
 
-        // The work title must be in it
-        if work.is_empty() || !title.contains(&work) {
+        if work.is_empty() {
             continue;
         }
         // With a season, the candidate must have that season
@@ -344,16 +372,20 @@ pub fn pick<'a>(candidates: &'a [Candidate], want: &Want<'_>) -> Option<&'a Cand
         {
             continue;
         }
-        // With an episode number, the candidate must be that episode
+        // With an episode number, the candidate must be that episode, and the work title
+        // must come before the number (see the head of this module)
         match want.episode_label {
             Some(label) if !label.trim().is_empty() => {
-                if !title_matches_episode(&candidate.title, label) {
+                let Some(position) = episode_position(&candidate.title, label) else {
+                    continue;
+                };
+                if !head_before(&candidate.title, position).contains(&work) {
                     continue;
                 }
             }
-            // Without a number, only the length can decide
+            // Without a number, only the work title and the length can decide
             _ => {
-                if want.duration_seconds.is_none() {
+                if want.duration_seconds.is_none() || !title.contains(&work) {
                     continue;
                 }
             }
@@ -424,40 +456,40 @@ mod tests {
         // `partDispNumber` of WS010105 can be a bare number such as `6` (measured).
         // As a text match it is also inside 第16話, which is another episode.
         let title = "作品F　シーズン4　第16話　サブタイトルF1";
-        assert!(!title_matches_episode(title, "6"));
-        assert!(title_matches_episode(title, "16"));
+        assert!(!episode_matches(title, "6"));
+        assert!(episode_matches(title, "16"));
 
         // The correct episode matches
         let sixth = "作品F　シーズン4　第6話　サブタイトルF2";
-        assert!(title_matches_episode(sixth, "6"));
-        assert!(title_matches_episode(sixth, "第6話"));
+        assert!(episode_matches(sixth, "6"));
+        assert!(episode_matches(sixth, "第6話"));
     }
 
     #[test]
     fn ignores_numbers_that_are_not_episode_numbers() {
         // A season number must not match
         let title = "作品A シーズン2　第363話　「サブタイトル前／後」";
-        assert!(!title_matches_episode(title, "2"));
-        assert!(!title_matches_episode(title, "第2話"));
-        assert!(title_matches_episode(title, "第363話"));
+        assert!(!episode_matches(title, "2"));
+        assert!(!episode_matches(title, "第2話"));
+        assert!(episode_matches(title, "第363話"));
 
         // A number of a subtitle must not match
         let sub = "作品名　第7話　3年目の夏";
-        assert!(!title_matches_episode(sub, "3"));
-        assert!(title_matches_episode(sub, "7"));
+        assert!(!episode_matches(sub, "3"));
+        assert!(episode_matches(sub, "7"));
     }
 
     #[test]
     fn understands_other_episode_notations() {
         // A kanji number matches as text; it cannot become a number
-        assert!(title_matches_episode(
+        assert!(episode_matches(
             "「作品D」第二期　第十四回　サブタイトルD",
             "第十四回"
         ));
         // #6, Episode 12 and 6話 are also episode numbers
-        assert!(title_matches_episode("作品名 #6 サブタイトル", "第6話"));
-        assert!(title_matches_episode("Work Title Episode 12", "12"));
-        assert!(title_matches_episode("作品名 6話 サブタイトル", "6"));
+        assert!(episode_matches("作品名 #6 サブタイトル", "第6話"));
+        assert!(episode_matches("Work Title Episode 12", "12"));
+        assert!(episode_matches("作品名 6話 サブタイトル", "6"));
     }
 
     #[test]
@@ -618,6 +650,43 @@ mod tests {
         );
     }
 
+    /// Measured: a short work title inside the subtitle of another work.
+    #[test]
+    fn ignores_the_work_title_inside_a_subtitle() {
+        let candidates = vec![candidate(
+            "so1",
+            "戦姫絶唱シンフォギアＸＶ\u{3000}EPISODE 01「人類史の彼方から」",
+            true,
+            9999.0,
+            1440.0,
+        )];
+        let query = sanitize_title("彼方から");
+        assert!(
+            pick(
+                &candidates,
+                &want(&query, Some("第1話"), None, Some(1440.0))
+            )
+            .is_none()
+        );
+
+        // The same words before the number are the work title
+        let candidates = vec![candidate(
+            "so2",
+            "彼方から\u{3000}第1話\u{3000}サブタイトル",
+            true,
+            10.0,
+            1440.0,
+        )];
+        assert_eq!(
+            pick(
+                &candidates,
+                &want(&query, Some("第1話"), None, Some(1440.0))
+            )
+            .map(|c| c.content_id.as_str()),
+            Some("so2")
+        );
+    }
+
     #[test]
     fn drops_previews_by_length() {
         // A preview has the work title and the number in it, so the length removes it
@@ -734,19 +803,19 @@ mod tests {
     fn matches_kanji_numbered_episodes_by_string() {
         // Real data: a kanji number, so only the text match finds it
         let title = "「作品D」第二期　第十四回　サブタイトルD";
-        assert!(title_matches_episode(title, "第十四回"));
-        assert!(!title_matches_episode(title, "第十三回"));
+        assert!(episode_matches(title, "第十四回"));
+        assert!(!episode_matches(title, "第十三回"));
     }
 
     #[test]
     fn matches_numeric_episodes_and_width_variants() {
         let title = "作品A シーズン2　第363話　「サブタイトル前／後」";
-        assert!(title_matches_episode(title, "第363話"));
-        assert!(!title_matches_episode(title, "第364話"));
+        assert!(episode_matches(title, "第363話"));
+        assert!(!episode_matches(title, "第364話"));
         // Full-width label and full-width title
-        assert!(title_matches_episode("作品A　第３６３話", "第363話"));
+        assert!(episode_matches("作品A　第３６３話", "第363話"));
         // Another form still matches through the number
-        assert!(title_matches_episode("作品A 第5話", "#5"));
+        assert!(episode_matches("作品A 第5話", "#5"));
     }
 
     #[test]
