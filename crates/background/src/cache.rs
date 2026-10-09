@@ -5,7 +5,7 @@
 //! | Layer | Key | Content | Time |
 //! |---|---|---|---|
 //! | Choice of the user | `dt:pin:<partId>` | The videoId that the user gave | For ever |
-//! | Map | `dt:vid:<partId>` | The videoId and the title, or `null` | 30 days, or one day for "not found" |
+//! | Map | `dt:vid:<partId>` | The videoId and the title, or `null` | 30 days; "not found" 1 hour, doubled on each miss up to one day |
 //! | Comments | `dt:cmt:<videoId>` | The comments | 6 hours |
 //!
 //! The choice of the user comes before the map. It is not a result of the match, so no
@@ -18,7 +18,10 @@
 //!
 //! A "not found" is also kept (`videoId: null`): a work that is not on nicovideo is
 //! still not there on the next open. It is kept for a short time only, because the
-//! channel can add the video later.
+//! channel can add the video later: dAnime can have a new episode before the channel, and
+//! a "not found" of one day hid the comments of that episode for the rest of the day. So
+//! the first one lasts one hour, and every miss after it doubles the time, up to one day
+//! (`miss_ttl_ms`).
 //!
 //! # The eviction uses the write order, not the read order
 //!
@@ -54,8 +57,10 @@ use d_tweaks_shared::cache_keys::{
 const DAY_MS: f64 = 24.0 * 60.0 * 60.0 * 1000.0;
 /// The map from an episode to a video does not change, so this is long.
 const VIDEO_TTL_MS: f64 = 30.0 * DAY_MS;
-/// A "not found". The channel can add the video later, so this is short.
-const VIDEO_MISS_TTL_MS: f64 = DAY_MS;
+/// The first "not found". The channel can add the video later, so this is short.
+const VIDEO_MISS_TTL_MS: f64 = 60.0 * 60.0 * 1000.0;
+/// The longest "not found", for a work that nicovideo does not have.
+const VIDEO_MISS_TTL_MAX_MS: f64 = DAY_MS;
 /// The comments grow, so this is short.
 const COMMENT_TTL_MS: f64 = 6.0 * 60.0 * 60.0 * 1000.0;
 /// Videos with comments in the storage.
@@ -132,11 +137,12 @@ pub async fn drop_stale_video_entries() -> Result<u32, JsValue> {
 
 /// Remove the "not found" entries of the map. Returns the number removed.
 ///
-/// A "not found" is kept for one day, which stops a search for a work that nicovideo
-/// does not have. But after an update of the extension the match logic can be another
-/// one, and then a "not found" of the old logic hides the correction for a day. This ran
-/// in a real session: one episode said "not found" although the interface returned the
-/// correct video, because an earlier version of the match had written that entry.
+/// A "not found" is kept for up to one day, which stops a search for a work that
+/// nicovideo does not have. But after an update of the extension the match logic can be
+/// another one, and then a "not found" of the old logic hides the correction for up to a
+/// day. This ran in a real session: one episode said "not found" although the interface
+/// returned the correct video, because an earlier version of the match had written that
+/// entry.
 ///
 /// The cost of this is one search for the episodes that a user opens again on the day of
 /// the update.
@@ -165,6 +171,17 @@ pub async fn drop_missing_video_entries() -> Result<u32, JsValue> {
     Ok(keys.length())
 }
 
+/// How long a "not found" holds after `misses` searches in a row found nothing.
+fn miss_ttl_ms(misses: u32) -> f64 {
+    let doublings = misses.saturating_sub(1).min(16);
+    (VIDEO_MISS_TTL_MS * f64::from(1u32 << doublings)).min(VIDEO_MISS_TTL_MAX_MS)
+}
+
+/// Searches in a row without a result. An entry of an older version has none: one.
+fn misses_of(entry: &JsValue) -> u32 {
+    json::get_f64(entry, "misses").map_or(1, |n| n.max(1.0) as u32)
+}
+
 pub async fn video_id(key: &str) -> Option<VideoIdHit> {
     let entry = read(&format!("{VIDEO_PREFIX}{key}")).await?;
     let age = age_ms(&entry)?;
@@ -176,13 +193,25 @@ pub async fn video_id(key: &str) -> Option<VideoIdHit> {
             title: json::get_string(&entry, "videoTitle").unwrap_or_default(),
             seconds: json::get_f64(&entry, "videoSeconds"),
         })),
-        None if age < VIDEO_MISS_TTL_MS => Some(VideoIdHit::Missing),
+        None if age < miss_ttl_ms(misses_of(&entry)) => Some(VideoIdHit::Missing),
         _ => None,
     }
 }
 
-/// Write to the map. `None` is kept as "not found".
+/// Write to the map. `None` is kept as "not found", one more miss than the entry before.
 pub async fn put_video_id(key: &str, picked: Option<&VideoRef>) -> Result<(), JsValue> {
+    let misses = match picked {
+        Some(_) => 0,
+        None => {
+            let before = read(&format!("{VIDEO_PREFIX}{key}")).await;
+            match before {
+                Some(entry) if json::get_string(&entry, "videoId").is_none() => {
+                    misses_of(&entry) + 1
+                }
+                _ => 1,
+            }
+        }
+    };
     let (id, title, seconds) = match picked {
         Some(video) => (
             JsValue::from_str(&video.id),
@@ -198,6 +227,7 @@ pub async fn put_video_id(key: &str, picked: Option<&VideoRef>) -> Result<(), Js
         ("videoId", id),
         ("videoTitle", title),
         ("videoSeconds", seconds),
+        ("misses", JsValue::from_f64(f64::from(misses))),
         ("at", JsValue::from_f64(Date::now())),
     ])?;
     write(&format!("{VIDEO_PREFIX}{key}"), &entry.into()).await
@@ -348,4 +378,22 @@ async fn remove_comments(video_ids: &[String]) {
     }
     // A failure is not a problem; the next write tries again
     let _ = chrome::local_remove(&keys).await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const HOUR_MS: f64 = 60.0 * 60.0 * 1000.0;
+
+    #[test]
+    fn a_miss_doubles_up_to_one_day() {
+        assert_eq!(miss_ttl_ms(1), HOUR_MS);
+        assert_eq!(miss_ttl_ms(2), 2.0 * HOUR_MS);
+        assert_eq!(miss_ttl_ms(5), 16.0 * HOUR_MS);
+        assert_eq!(miss_ttl_ms(6), DAY_MS);
+        assert_eq!(miss_ttl_ms(100), DAY_MS);
+        // An entry that says zero is still a miss
+        assert_eq!(miss_ttl_ms(0), HOUR_MS);
+    }
 }
