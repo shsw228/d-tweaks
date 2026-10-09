@@ -162,8 +162,8 @@ pub const WORDS: &[(&str, &str, &str)] = &[
     ),
     (
         "comments.no_reply",
-        "コメントを取得できません（拡張の再読み込みが必要かもしれません）",
-        "The comments did not arrive (the extension may need a reload)",
+        "コメントを取得できません（拡張を更新した後なら、ページを再読み込みしてください）",
+        "The comments did not arrive (after an update of the extension, reload the page)",
     ),
     ("pin.placeholder", "動画の URL", "Address of a video"),
     (
