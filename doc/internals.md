@@ -236,17 +236,19 @@ number of the title and matched a season.
 
 ### Remove a "not found" on an update
 
-The map keeps a "not found" for one day, so a work that nicovideo does not have gives
-one search and not one per open.
+The map keeps a "not found", so a work that nicovideo does not have gives one search
+and not one per open. The first one lasts one hour, and each miss after it doubles the
+time, up to one day. dAnime can have a new episode before the channel, and a "not
+found" of one day hid the comments of that episode for the rest of the day.
 
 `onInstalled` removes those entries. An update often changes the match, and a "not
-found" of the old logic hides the correction for a day. This happened in a real
+found" of the old logic hides the correction for up to a day. This happened in a real
 session: an episode said "not found" while the interface returned the correct video.
 
 ### Give the cache a version
 
 `storage.local` keeps the map from the episode to the video for 30 days. It
-keeps a "not found" result for one day.
+keeps a "not found" result for one hour to one day.
 
 **Change the version in the key when you change the match logic.** If you forget
 this step, the old result stays and the correction has no effect.
