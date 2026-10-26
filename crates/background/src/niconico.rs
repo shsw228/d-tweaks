@@ -9,8 +9,12 @@
 //! | Step | Endpoint |
 //! |---|---|
 //! | 1. Search | `GET snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search` |
-//! | 2. Watch data | `GET www.nicovideo.jp/watch/{videoId}?responseType=json` gives `data.response.$watchV4.data.comment.nvComment` |
+//! | 2. Watch data | `GET www.nicovideo.jp/watch/{videoId}` has `data.response.$watchV4.data.comment.nvComment` in `<meta name="server-response">` |
 //! | 3. Comments | `POST {nvComment.server}/v1/threads` |
+//!
+//! Step 2 reads the HTML page, not `?responseType=json`: since 2026-10 that reply is
+//! `400 nvpcClientVersion is missing or does not match.`, and the version changes with
+//! each deploy of the site.
 //!
 //! Step 2 gives `server`, `threadKey` and `params` together, so
 //! `nvapi.nicovideo.jp/v1/comment/keys/thread` is not necessary.
@@ -84,6 +88,68 @@ async fn fetch_json(request: Request) -> Result<JsValue, JsValue> {
     JsFuture::from(response.json()?).await
 }
 
+/// Send the request and return the text.
+async fn fetch_text(request: Request) -> Result<String, JsValue> {
+    let response: Response = JsFuture::from(window()?.fetch_with_request(&request))
+        .await?
+        .dyn_into()?;
+    if !response.ok() {
+        return Err(JsValue::from_str(&format!("HTTP {}", response.status())));
+    }
+    JsFuture::from(response.text()?)
+        .await?
+        .as_string()
+        .ok_or_else(|| JsValue::from_str("watch の本文が文字列ではありません"))
+}
+
+/// The JSON in `<meta name="server-response" content="...">` of the watch page.
+fn server_response(html: &str) -> Option<String> {
+    const START: &str = "name=\"server-response\" content=\"";
+    let rest = &html[html.find(START)? + START.len()..];
+    let content = &rest[..rest.find('"')?];
+    Some(unescape_attribute(content))
+}
+
+/// Decode the character references of an attribute value.
+fn unescape_attribute(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut rest = value;
+    while let Some(at) = rest.find('&') {
+        out.push_str(&rest[..at]);
+        rest = &rest[at..];
+        let decoded = rest.find(';').and_then(|end| {
+            let name = &rest[1..end];
+            let ch = match name {
+                "quot" => Some('"'),
+                "amp" => Some('&'),
+                "lt" => Some('<'),
+                "gt" => Some('>'),
+                "apos" => Some('\''),
+                _ => {
+                    let code = match name.strip_prefix("#x").or_else(|| name.strip_prefix("#X")) {
+                        Some(hex) => u32::from_str_radix(hex, 16).ok(),
+                        None => name.strip_prefix('#').and_then(|dec| dec.parse().ok()),
+                    };
+                    code.and_then(char::from_u32)
+                }
+            };
+            ch.map(|ch| (ch, end + 1))
+        });
+        match decoded {
+            Some((ch, len)) => {
+                out.push(ch);
+                rest = &rest[len..];
+            }
+            None => {
+                out.push('&');
+                rest = &rest[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 /// Search for videos. A maximum of 100 items.
 ///
 /// `matching::pick` makes the selection; this only collects the candidates.
@@ -150,14 +216,16 @@ pub struct Watch {
     pub comments: Vec<Comment>,
 }
 
-/// Get `nvComment` (server, threadKey, params) and the video itself from
-/// `watch?responseType=json`.
+/// Get `nvComment` (server, threadKey, params) and the video itself from the watch page.
 ///
 /// The title and the length come from the same reply. A video that the user gave has no
 /// entry in the search, so this is the only source for its name and its length.
 async fn watch_data(video_id: &str) -> Result<(VideoMeta, String, String, JsValue), JsValue> {
-    let url = format!("{WATCH_ENDPOINT}{video_id}?responseType=json");
-    let json = fetch_json(request(&url, "GET", None)?).await?;
+    let url = format!("{WATCH_ENDPOINT}{video_id}");
+    let html = fetch_text(request(&url, "GET", None)?).await?;
+    let text = server_response(&html)
+        .ok_or_else(|| JsValue::from_str("watch に server-response がありません"))?;
+    let json = JSON::parse(&text)?;
 
     // The older shape had these directly in data.response
     let base = json::path(&json, &["data", "response", "$watchV4", "data"])
@@ -257,4 +325,28 @@ pub fn comments_to_js(comments: &[Comment]) -> Result<Array, JsValue> {
         array.push(&obj);
     }
     Ok(array)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_the_server_response() {
+        let html = r#"<meta data-server="1" name="server-response" content="{&quot;a&quot;:&quot;x &amp;lt; &lt;b&gt; &#039;&#x41;&quot;}"/>"#;
+        assert_eq!(
+            server_response(html).as_deref(),
+            Some(r#"{"a":"x &lt; <b> 'A"}"#)
+        );
+    }
+
+    #[test]
+    fn keeps_a_bare_ampersand() {
+        assert_eq!(unescape_attribute("a & b &zz; c&"), "a & b &zz; c&");
+    }
+
+    #[test]
+    fn no_server_response() {
+        assert_eq!(server_response("<html></html>"), None);
+    }
 }

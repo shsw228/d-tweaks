@@ -222,7 +222,7 @@ Three decisions in that path:
   the value arrives over a message and goes into a request, so both sides use the same
   function.
 
-One request gives everything that this path needs: `watch?responseType=json` has the
+One request gives everything that this path needs: the watch page has the
 title and the length of the video next to `nvComment`. A video that the search does not
 give has no other source for its name and its length.
 
